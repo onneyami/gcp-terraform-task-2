@@ -1,0 +1,30 @@
+# this manifest creates pods of the APOD API application. It specifies the number of replicas, the container image to use, and the resource requests and limits for CPU and memory. The deployment also includes labels for identifying the pods and a selector for matching the pods with the corresponding service.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apod-api
+  namespace: default
+  labels:
+    app: apod-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: apod-api
+  template:
+    metadata:
+      labels:
+        app: apod-api
+    spec:
+      containers:
+        - name: apod-api
+          image: europe-north1-docker.pkg.dev/andrei-innowise-tests-120826/gke-repo/nasa-apod:v1
+          ports:
+            - containerPort: 5000
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

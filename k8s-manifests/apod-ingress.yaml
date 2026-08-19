@@ -1,0 +1,25 @@
+# this manifest creates an Ingress resource for the APOD API. It defines the rules for routing incoming HTTP requests to the appropriate backend service based on the specified host and path. The Ingress also includes TLS configuration for secure communication, using a certificate issued by cert-manager with Let's Encrypt as the certificate authority. The Ingress is associated with the NGINX ingress controller through annotations, allowing it to handle incoming traffic and route it to the APOD API service.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: apod-api-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+    - hosts:
+        - nasa.andrei-test.lendo.dev
+      secretName: nasa-tls-cert
+  rules:
+    - host: nasa.andrei-test.lendo.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: apod-api-service
+                port:
+                  number: 80

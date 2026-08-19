@@ -1,0 +1,14 @@
+# This manifest creates a Service resource for the APOD API. It is connects nginx-controller with pods of application
+apiVersion: v1
+kind: Service
+metadata:
+  name: apod-api-service
+  namespace: default
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 5000
+      protocol: TCP
+  selector:
+    app: apod-api

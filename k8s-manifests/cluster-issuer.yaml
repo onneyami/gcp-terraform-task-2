@@ -1,0 +1,15 @@
+# this manifest creates a ClusterIssuer resource for cert-manager to use Let's Encrypt for issuing TLS certificates. The ClusterIssuer is configured to use the ACME protocol with the Let's Encrypt production server, and it specifies an email address for notifications. It also defines a private key secret reference and an HTTP-01 challenge solver that uses the NGINX ingress controller.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: andrei.puzanau@innowise.com
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
