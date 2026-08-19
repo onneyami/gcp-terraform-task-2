@@ -1,6 +1,3 @@
-Here is the updated, professional **`README.md`** translated into English for your repository.
-
-Save or update the **`README.md`** file in the root directory of your project:
 
 ```markdown
 # 🌌 NASA APOD Application on Google Kubernetes Engine (GKE)
@@ -11,25 +8,7 @@ Comprehensive guide to deploying the **NASA Astronomy Picture of the Day (APOD)*
 
 ## 🏛️ System Architecture
 
-
-```
-
-[ User / Browser ]
-│ (HTTPS: nasa.andrei-test.lendo.dev)
-▼
-[ DNS A-Record -> 35.228.37.177 ]
-▼
-[ GCP Cloud Load Balancer ]
-▼
-[ Ingress Nginx Controller ] ──── (TLS Secret: nasa-tls-cert)
-▼
-[ K8s Service: apod-api-service:80 ]
-▼
-[ K8s Deployment: apod-api (2 Replicas, Port 8080) ]
-▼
-[ NASA APOD REST API (api.nasa.gov) ]
-
-```
+![GKE Infrastructure & Deployment Architecture](docs/architecture_diagram.png)
 
 ---
 
@@ -37,6 +16,8 @@ Comprehensive guide to deploying the **NASA Astronomy Picture of the Day (APOD)*
 
 ```text
 .
+├── docs/
+│   └── architecture_diagram.png # Generated architecture diagram
 ├── gke.tf                   # Terraform: VPC, private subnets, and GKE cluster configuration
 ├── helm_providers.tf        # Terraform: Helm provider setup for Kubernetes integration
 ├── helm_ingress_nginx.tf    # Terraform: Automated Ingress Nginx Controller deployment
@@ -48,7 +29,6 @@ Comprehensive guide to deploying the **NASA Astronomy Picture of the Day (APOD)*
 │   ├── apod-service.yaml    # ClusterIP Service for internal routing
 │   └── apod-ingress.yaml    # Ingress routing rules & TLS certificate request
 └── README.md
-
 ```
 
 ---
