@@ -9,6 +9,6 @@ output "gke_egress_static_ip" {
 }
 
 output "ingress_static_ip" {
-  value       = google_compute_address.ingress_static_ip.address
-  description = "Привяжи этот статический IP к A-записи домена *.andrei-test.lendo.dev"
+  description = "The static external IP address reserved for Nginx Ingress"
+  value       = data.google_compute_address.ingress_static_ip.address
 }

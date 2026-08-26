@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wireguard-ui
+  namespace: default
+  labels:
+    app: wireguard-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wireguard-ui
+  template:
+    metadata:
+      labels:
+        app: wireguard-ui
+    spec:
+      containers:
+      - name: wg-easy
+        image: ghcr.io/wg-easy/wg-easy:11
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+          capabilities:
+            add: ["NET_ADMIN", "SYS_MODULE"]
+        env:
+        - name: WG_HOST
+          value: "vpn.andrei-test.lendo.dev"
+        - name: PASSWORD
+          value: "admin"
+        - name: WG_PORT
+          value: "51820"
+        - name: WG_DEFAULT_ADDRESS
+          value: "10.8.0.x"
+        ports:
+        - containerPort: 51821
+          name: http
+        - containerPort: 51820
+          name: vpn-udp
+          protocol: UDP
+        volumeMounts:
+        - mountPath: /etc/wireguard
+          name: wireguard-config
+      volumes:
+      - name: wireguard-config
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wireguard-ui-service
+  namespace: default
+spec:
+  type: ClusterIP
+  selector:
+    app: wireguard-ui
+  ports:
+  - name: http
+    port: 51821
+    targetPort: 51821
+    protocol: TCP
