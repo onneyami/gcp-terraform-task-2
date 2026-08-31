@@ -1,0 +1,29 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jenkins-ingress
+  namespace: jenkins
+  annotations:
+    # Set the ingress class (use 'nginx' if using NGINX Ingress Controller)
+    kubernetes.io/ingress.class: "nginx"
+    # Tells cert-manager to automatically request a Let's Encrypt SSL certificate
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # (Optional) Upload limit override for large Jenkins artifact/plugin uploads
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+spec:
+  tls:
+    - hosts:
+        - jenkins.andrei-test.lendo.dev
+      # cert-manager saves the HTTPS certificate inside this secret
+      secretName: jenkins-tls-secret
+  rules:
+    - host: jenkins.andrei-test.lendo.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jenkins-service
+                port:
+                  number: 8080
