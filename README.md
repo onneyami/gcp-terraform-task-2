@@ -1,8 +1,6 @@
+# 🌌 Production-Ready Infrastructure on GKE (GitOps & Multi-Service Platform)
 
-```markdown
-# 🌌 NASA APOD Application on Google Kubernetes Engine (GKE)
-
-Comprehensive guide to deploying the **NASA Astronomy Picture of the Day (APOD)** application in Google Cloud Platform (GCP) using **Terraform**, **Kubernetes (GKE)**, **Nginx Ingress**, and **Cert-Manager (Let's Encrypt)** with automated SSL/TLS termination.
+Comprehensive guide to deploying a GitOps-managed, multi-service platform on Google Cloud Platform (GCP) using **Terraform**, **Google Kubernetes Engine (GKE)**, **ArgoCD**, **WireGuard VPN**, **Nginx Ingress Controller**, and **Cert-Manager (Let's Encrypt)** with automated TLS termination across subdomains (`*.andrei-test.lendo.dev`).
 
 ---
 
@@ -17,167 +15,68 @@ Comprehensive guide to deploying the **NASA Astronomy Picture of the Day (APOD)*
 ```text
 .
 ├── docs/
-│   └── architecture_diagram.png # Generated architecture diagram
-├── gke.tf                   # Terraform: VPC, private subnets, and GKE cluster configuration
-├── helm_providers.tf        # Terraform: Helm provider setup for Kubernetes integration
-├── helm_ingress_nginx.tf    # Terraform: Automated Ingress Nginx Controller deployment
-├── helm_cert_manager.tf     # Terraform: Automated cert-manager deployment
-├── providers.tf             # Terraform: GCP provider definitions
+│   └── architecture_diagram.png # Infrastructure & network topology diagram
+├── gke.tf                    # Terraform: VPC, private subnets, NAT gateway, & GKE cluster
+├── helm_providers.tf         # Terraform: Helm provider configuration
+├── helm_ingress_nginx.tf     # Terraform: Nginx Ingress Controller deployment (Static External IP)
+├── helm_cert_manager.tf      # Terraform: cert-manager installation
+├── providers.tf              # Terraform: GCP & Kubernetes provider settings
+├── argocd-app.yaml           # ArgoCD: Root Application definition (GitOps App-of-Apps pattern)
 ├── k8s-manifests/
-│   ├── cluster-issuer.yaml  # Cert-Manager ClusterIssuer (Let's Encrypt Production)
-│   ├── apod-deployment.yaml # Application Deployment (2 replicas, UI + REST API proxy)
-│   ├── apod-service.yaml    # ClusterIP Service for internal routing
-│   └── apod-ingress.yaml    # Ingress routing rules & TLS certificate request
+│   ├── cluster-issuer.yaml   # Cert-Manager ClusterIssuer (Let's Encrypt Production)
+│   ├── apod-deployment.yaml  # NASA APOD Web & API Deployment
+│   ├── apod-service.yaml     # ClusterIP Service for NASA APOD
+│   ├── apod-ingress.yaml     # Ingress routing & TLS cert spec for NASA APOD
+│   ├── wireguard-deployment.yaml # WireGuard VPN (wg-easy:11) Deployment & ClusterIP Service
+│   └── wireguard-ingress.yaml    # Ingress routing & TLS cert spec for WireGuard Web UI
 └── README.md
 ```
 
----
-
-## 🛠️ Technology Stack
-
-* **Cloud Provider:** Google Cloud Platform (GCP)
-* **Infrastructure as Code (IaC):** Terraform
-* **Orchestration:** Google Kubernetes Engine (GKE Private Cluster)
-* **Package Management:** Helm 3
-* **Ingress Controller:** Nginx Ingress
-* **SSL/TLS Automation:** cert-manager + Let's Encrypt (HTTP-01 Challenge)
-* **Application Runtime:** Node.js (Microservice Proxy + Web UI)
-
----
-
 ## 🚀 Deployment Guide
 
-### 1. Provision Infrastructure (Terraform)
+1. ### Provision Infrastructure (Terraform)
 
-Ensure you have the `gcloud CLI` authorized and `terraform` installed.
+   Ensure you have the gcloud CLI authorized and terraform installed.
 
-```bash
+```Shell
 # 1. Initialize Terraform providers and modules
 terraform init
 
 # 2. Preview planned infrastructure changes
 terraform plan
 
-# 3. Apply the configuration (provisions GKE, Nginx Ingress, and cert-manager)
+# 3. Apply the configuration (provisions VPC, GKE, Nginx Ingress, and cert-manager)
 terraform apply -auto-approve
-
 ```
 
-### 2. Connect to the GKE Cluster
+2. ### Connect to the GKE Cluster
 
-Once `terraform apply` completes successfully, fetch the cluster credentials:
+   Once terraform apply completes successfully, fetch the cluster credentials:
 
-```bash
+```Shell
 gcloud container clusters get-credentials gke-private-cluster \
-  --region europe-north1 \
-  --project andrei-innowise-tests-120826
-
+  --region YOUR_PROJECT_REGION \
+  --project YOUR_PROJECT_ID
 ```
 
----
+3. ### Apply cluster-issuer
 
-### 3. Build & Push Image to GCP Artifact Registry
-
-To host your custom container image in GCP Artifact Registry:
-
-```bash
-# 1. Clone the official NASA APOD repository
-git clone [https://github.com/nasa/apod-api.git](https://github.com/nasa/apod-api.git)
-cd apod-api
-
-# 2. Create a Docker repository in GCP Artifact Registry
-gcloud artifacts repositories create gke-repo \
-  --repository-format=docker \
-  --location=europe-north1 \
-  --description="Docker repository for GKE images"
-
-# 3. Authenticate Docker with GCP
-gcloud auth configure-docker europe-north1-docker.pkg.dev
-
-# 4. Build and push the Docker image
-docker build -t europe-north1-docker.pkg.dev/andrei-innowise-tests-120826/gke-repo/nasa-apod:v1 .
-docker push europe-north1-docker.pkg.dev/andrei-innowise-tests-120826/gke-repo/nasa-apod:v1
-
-```
-
----
-
-### 4. Deploy Kubernetes Manifests
-
-Return to the root project directory and apply the Kubernetes manifests:
-
-```bash
-# 1. Apply the ClusterIssuer for Let's Encrypt
+```shell
 kubectl apply -f k8s-manifests/cluster-issuer.yaml
-
-# 2. Deploy the application components (Deployment, Service, Ingress)
-kubectl apply -f k8s-manifests/
-
 ```
 
----
+4. ### Apply all k8s manifests
 
-### 5. Configure DNS A-Record
+   ```shell
+   kubectl apply -f k8s-manifests/
+   ```
 
-Retrieve the external IP address assigned to the Nginx Ingress Load Balancer:
 
-```bash
-kubectl get svc -n ingress-nginx ingress-nginx-controller
+## 🌐 Application & Management Endpoints
 
-```
-
-Copy the `EXTERNAL-IP` (e.g., `35.228.37.177`) and add an **A-record** in your DNS management panel:
-
-* **Host / Subdomain:** `nasa.andrei-test`
-* **Type:** `A`
-* **Value:** `35.228.37.177`
-
----
-
-## 🔍 Verification & Health Checks
-
-### 1. Check Pod & Service Status
-
-```bash
-kubectl get pods -l app=apod-api
-
-```
-
-All pods should show status `1/1 Running`.
-
-### 2. Verify TLS Certificate Issuance
-
-```bash
-kubectl get certificate
-
-```
-
-The `READY` column must display `True`:
-
-```text
-NAME            READY   SECRET          AGE
-nasa-tls-cert   True    nasa-tls-cert   5m
-
-```
-
-### 3. Verify HTTPS Endpoint
-
-Run a test request via terminal:
-
-```bash
-curl -I [https://nasa.andrei-test.lendo.dev](https://nasa.andrei-test.lendo.dev)
-
-```
-
-Expected output: `HTTP/2 200 OK`.
-
----
-
-## 🌐 Application Endpoints
-
-* **Web UI:** `https://nasa.andrei-test.lendo.dev/` — Interactive dashboard featuring the Astronomy Picture of the Day with media handling (images/videos) and dark theme.
-* **REST API:** `https://nasa.andrei-test.lendo.dev/v1/apod/` — Returns the raw JSON metadata directly from the NASA APOD service.
-
-```
-
-```
+| **Endpoint**                                        | **Service** | **Auth Credentials**          | **Description**                          |
+| --------------------------------------------------------- | ----------------- | ----------------------------------- | ---------------------------------------------- |
+| **`https://nasa.andrei-test.lendo.dev`**          | NASA APOD Web UI  | Public                              | Interactive astronomy media viewer & dashboard |
+| **`https://nasa.andrei-test.lendo.dev/v1/apod/`** | NASA APOD API     | Public                              | Raw JSON metadata proxy for APOD service       |
+| **`https://argocd.andrei-test.lendo.dev`**        | ArgoCD UI         | `admin`/*(retrieved in step 3)* | GitOps CD management console                   |
+| **`https://vpn.andrei-test.lendo.dev`**           | WireGuard Web UI  | `admin`                           | VPN user & profile management portal           |
