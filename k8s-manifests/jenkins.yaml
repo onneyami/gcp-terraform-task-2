@@ -22,7 +22,6 @@ roleRef:
   name: cluster-admin
   apiGroup: rbac.authorization.k8s.io
 ---
-# 100 GB PERSISTENT VOLUME CLAIM FOR /var/jenkins_home
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -106,29 +105,3 @@ spec:
     - name: agent
       port: 50000
       targetPort: 50000
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: jenkins-ingress
-  namespace: jenkins
-  annotations:
-    kubernetes.io/ingress.class: "nginx"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-spec:
-  tls:
-    - hosts:
-        - jenkins.andrei-test.lendo.dev
-      secretName: jenkins-tls-secret
-  rules:
-    - host: jenkins.andrei-test.lendo.dev
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: jenkins-service
-                port:
-                  number: 8080
