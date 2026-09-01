@@ -64,6 +64,10 @@ resource "google_container_cluster" "primary" {
   name     = "gke-private-cluster"
   location = var.zone # europe-north1-a
 
+  workload_identity_config {
+    workload_pool = "${var.project_id}.svc.id.goog"
+  }
+
   # Отключаем защиту от удаления
   deletion_protection = false
 
@@ -122,6 +126,10 @@ resource "google_container_node_pool" "primary_nodes" {
 
     service_account = google_service_account.gke_sa.email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+
+    workload_metadata_config {
+      mode = "GKE_METADATA"
+    }
 
     tags = ["gke-node"]
   }
