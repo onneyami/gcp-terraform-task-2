@@ -3,7 +3,8 @@ pipeline {
 
     environment {
         ARGOCD_APP_NAME = 'wireguard-ui'
-        ARGOCD_SERVER   = 'argocd-server.argocd.svc.cluster.local:443'
+        # Explicitly use port 80 (plain HTTP inside cluster network)
+        ARGOCD_SERVER   = 'argocd-server.argocd.svc.cluster.local:80'
         ARGOCD_TOKEN    = credentials('argocd-jenkins-token')
     }
 
@@ -20,20 +21,20 @@ pipeline {
                 script {
                     echo "Triggering hard refresh and sync for ${env.ARGOCD_APP_NAME}..."
                     sh '''
-                        # 1. Force ArgoCD to refresh Git repository state
+                        # 1. Refresh ArgoCD app state via HTTP
                         echo "Refreshing application..."
-                        curl -k -s -X GET \
+                        curl -s -f -X GET \
                           -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
-                          "https://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP_NAME}?refresh=hard" > /dev/null
+                          "http://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP_NAME}?refresh=hard" > /dev/null
 
                         sleep 2
 
                         # 2. Trigger Application Sync
                         echo "Triggering sync..."
-                        curl -k -s -X POST \
+                        curl -s -f -X POST \
                           -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
                           -H "Content-Type: application/json" \
-                          "https://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP_NAME}/sync" \
+                          "http://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP_NAME}/sync" \
                           -d '{"revision": "HEAD", "prune": true}'
                     '''
                 }
