@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         ARGOCD_APP_NAME = 'wireguard-ui'
-        # Explicitly use port 80 (plain HTTP inside cluster network)
+        // Explicitly use port 80 (plain HTTP inside cluster network)
         ARGOCD_SERVER   = 'argocd-server.argocd.svc.cluster.local:80'
         ARGOCD_TOKEN    = credentials('argocd-jenkins-token')
     }
