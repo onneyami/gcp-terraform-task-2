@@ -1,8 +1,20 @@
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: argocd-cli
+    image: argoproj/argocd:v2.10.4
+    command: ['cat']
+    tty: true
+'''
+        }
+    }
 
     environment {
-        // Correct internal ClusterIP DNS for ArgoCD API Server
         ARGOCD_APP_NAME = 'wireguard-ui'
         ARGOCD_SERVER   = 'argocd-server.argocd.svc.cluster.local:443'
         ARGOCD_TOKEN    = credentials('argocd-jenkins-token')
@@ -17,52 +29,44 @@ pipeline {
         }
 
         stage('Trigger ArgoCD Sync') {
-            agent {
-                docker {
-                    image 'argoproj/argocd:v2.10.4'
-                    args '-u 0'
-                }
-            }
             steps {
-                script {
-                    echo "Refreshing ArgoCD state for ${ARGOCD_APP_NAME}..."
-                    sh """
-                        # Force refresh ArgoCD state to detect new Git commits
-                        argocd app get ${ARGOCD_APP_NAME} \
-                          --server ${ARGOCD_SERVER} \
-                          --auth-token ${ARGOCD_TOKEN} \
-                          --insecure \
-                          --refresh
-                        
-                        # Trigger sync
-                        argocd app sync ${ARGOCD_APP_NAME} \
-                          --server ${ARGOCD_SERVER} \
-                          --auth-token ${ARGOCD_TOKEN} \
-                          --insecure \
-                          --prune
-                    """
+                container('argocd-cli') {
+                    script {
+                        echo "Refreshing ArgoCD state for ${ARGOCD_APP_NAME}..."
+                        sh """
+                            # Refresh ArgoCD state
+                            argocd app get ${ARGOCD_APP_NAME} \
+                              --server ${ARGOCD_SERVER} \
+                              --auth-token ${ARGOCD_TOKEN} \
+                              --insecure \
+                              --refresh
+
+                            # Trigger application sync
+                            argocd app sync ${ARGOCD_APP_NAME} \
+                              --server ${ARGOCD_SERVER} \
+                              --auth-token ${ARGOCD_TOKEN} \
+                              --insecure \
+                              --prune
+                        """
+                    }
                 }
             }
         }
 
         stage('Wait for Sync & Health') {
-            agent {
-                docker {
-                    image 'argoproj/argocd:v2.10.4'
-                    args '-u 0'
-                }
-            }
             steps {
-                script {
-                    echo "Waiting for ${ARGOCD_APP_NAME} to become Healthy..."
-                    sh """
-                        argocd app wait ${ARGOCD_APP_NAME} \
-                          --server ${ARGOCD_SERVER} \
-                          --auth-token ${ARGOCD_TOKEN} \
-                          --insecure \
-                          --health \
-                          --timeout 300
-                    """
+                container('argocd-cli') {
+                    script {
+                        echo "Waiting for ${ARGOCD_APP_NAME} to become Healthy..."
+                        sh """
+                            argocd app wait ${ARGOCD_APP_NAME} \
+                              --server ${ARGOCD_SERVER} \
+                              --auth-token ${ARGOCD_TOKEN} \
+                              --insecure \
+                              --health \
+                              --timeout 300
+                        """
+                    }
                 }
             }
         }
