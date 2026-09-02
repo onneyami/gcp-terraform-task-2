@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         ARGOCD_APP_NAME = 'wireguard-ui'
-        // Explicitly use port 80 (plain HTTP inside cluster network)
         ARGOCD_SERVER   = 'argocd-server.argocd.svc.cluster.local:80'
         ARGOCD_TOKEN    = credentials('argocd-jenkins-token')
     }
@@ -20,23 +19,23 @@ pipeline {
             steps {
                 script {
                     echo "Triggering hard refresh and sync for ${env.ARGOCD_APP_NAME}..."
-                    sh '''
-                        # 1. Refresh ArgoCD app state via HTTP
+                    sh """
+                        # 1. Refresh ArgoCD app state
                         echo "Refreshing application..."
-                        curl -s -f -X GET \
-                          -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
-                          "http://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP_NAME}?refresh=hard" > /dev/null
+                        curl -s -f -X GET \\
+                          -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
+                          "http://${env.ARGOCD_SERVER}/api/v1/applications/${env.ARGOCD_APP_NAME}?refresh=hard" > /dev/null
 
                         sleep 2
 
-                        # 2. Trigger Application Sync
+                        # 2. Trigger Application Sync with valid JSON payload
                         echo "Triggering sync..."
-                        curl -s -f -X POST \
-                          -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
-                          -H "Content-Type: application/json" \
-                          "http://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP_NAME}/sync" \
+                        curl -s -f -X POST \\
+                          -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
+                          -H "Content-Type: application/json" \\
+                          "http://${env.ARGOCD_SERVER}/api/v1/applications/${env.ARGOCD_APP_NAME}/sync" \\
                           -d '{"revision": "HEAD", "prune": true}'
-                    '''
+                    """
                 }
             }
         }
