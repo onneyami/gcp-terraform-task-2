@@ -1,114 +1,130 @@
----
-# GKE GitOps Infrastructure & Observability Stack
 
-This repository contains the declarative infrastructure and application manifests for managing a secure, private Google Kubernetes Engine (GKE) cluster using a full GitOps workflow powered by **ArgoCD**.
----
-## 🏗️ Architecture Overview
+# GKE GitOps Infrastructure & Continuous Deployment Platform
 
-The platform consists of a private GKE cluster running microservices, operational tooling, and a complete observability stack—all managed declaratively through Git repository syncs.
-
-* **Cluster Infrastructure:** GKE Private Cluster (`gke-private-cluster`) on `nodepool-n2-standard-4` worker nodes.
-* **GitOps Engine:** ArgoCD managing Helm releases and raw K8s manifests directly from Git.
-* **Networking & Ingress:** NGINX Ingress Controller with automated TLS certificates issued via `cert-manager` and Let's Encrypt.
-* **Observability:** `kube-prometheus-stack` (Prometheus, Grafana, Alertmanager, Node Exporter, kube-state-metrics).
-* **Workloads & Services:**
-  * **NASA APOD Application** (`nasa-apod`)
-  * **WireGuard UI** (`wireguard-ui`)
+A production-grade, GitOps-driven Kubernetes platform deployed on Google Kubernetes Engine (GKE) private cluster. This repository manages core cluster infrastructure, observability stacks, workload deployments, and automated CI/CD synchronization using ArgoCD and Jenkins.
 
 ---
 
-## 🚀 Managed Applications & Endpoints
+## 🏛 Architecture Overview
 
-| Service                  | Endpoint Domain                                | Namespace      | Sync Source                                 |
-| :----------------------- | :--------------------------------------------- | :------------- | :------------------------------------------ |
-| **Grafana UI**     | `https://grafana.andrei-test.lendo.dev`      | `monitoring` | Helm (`kube-prometheus-stack` v88.6.2)    |
-| **Prometheus API** | `http://prometheus-operated.monitoring:9090` | `monitoring` | Operator CRD (`Prometheus`)               |
-| **WireGuard UI**   | `https://vpn.andrei-test.lendo.dev`          | `default`    | Git Manifests (`k8s-manifests/wireguard`) |
-| **NASA APOD API**  | `https://apod.andrei-test.lendo.dev`         | `default`    | Git Manifests (`k8s-manifests/nasa-apod`) |
+```
+                    +-----------------------------------------------+
+                    |                GitHub Repository              |
+                    |      (gcp-terraform-task-2 / main branch)    |
+                    +-----------------------+-----------------------+
+                                            |
+                             +--------------+--------------+
+                             |                             |
+                             v                             v
+                   +-------------------+         +-------------------+
+                   |  Jenkins Pipeline |         |  ArgoCD Operator  |
+                   +---------+---------+         +---------+---------+
+                             |                             |
+                             | Trigger Sync (REST API)     | Sync Manifests
+                             v                             v
+               +---------------------------------------------------------+
+               |                 GKE Private Cluster                     |
+               |                                                         |
+               |  [ Namespace: argocd ]                                  |
+               |   - ArgoCD Server / Controller                          |
+               |                                                         |
+               |  [ Namespace: jenkins ]                                 |
+               |   - Jenkins Master / Agent Pods                         |
+               |                                                         |
+               |  [ Namespace: monitoring ]                              |
+               |   - Prometheus / Grafana (Persistent PVCs)              |
+               |   - Loki & Promtail Stack                               |
+               |                                                         |
+               |  [ Namespace: default ]                                 |
+               |   - WireGuard UI (`wireguard-ui`)                       |
+               |   - NASA APOD API (`nasa-apod`)                        |
+               |   - NGINX Ingress Controller + cert-manager             |
+               +---------------------------------------------------------+
+```
+
+
+---
+
+
+
+## 🛠 Tech Stack & Infrastructure
+
+* **Cloud Provider:** Google Cloud Platform (GCP)
+* **Kubernetes:** GKE Private Cluster (`nodepool-n2-standard-4` with cost-optimized auto-scaling to 0)
+* **Continuous Delivery (GitOps):** ArgoCD (`v2.10.4`)
+* **Continuous Integration (CI):** Jenkins (Kubernetes-native agent orchestration)
+* **Observability:** Prometheus, Grafana ("Dashboards as Code"), Loki, Promtail
+* **Ingress & Security:** NGINX Ingress Controller, `cert-manager` (Let's Encrypt TLS), Jenkins RBAC Service Accounts
 
 ---
 
 ## 📁 Repository Structure
 
-```text
+```directory
 .
 ├── k8s-manifests/
-│   ├── observability-app.yaml     # ArgoCD Application for kube-prometheus-stack
-│   ├── wireguard-app.yaml         # ArgoCD Application for WireGuard UI
-│   ├── nasa-apod-app.yaml         # ArgoCD Application for NASA APOD
-│   └── wireguard/
-│       └── wireguard.yaml         # Deployment, Service, & Ingress for WireGuard UI
-├── terraform/                      # Infrastructure provisioner for GKE & GCP resources
+│   ├── argocd/                 # ArgoCD Application CRDs & Root App configurations
+│   ├── dashboards/             # ConfigMap "Dashboards as Code" for Grafana
+│   ├── monitoring/             # kube-prometheus-stack & Loki Helm release values
+│   ├── nasa-apod/              # Workload manifests for NASA APOD API service
+│   └── wireguard/              # Workload manifests for WireGuard UI (`wireguard-ui`)
+├── Jenkinsfile_for_sync_argocd_trigger  # Declarative Jenkins pipeline triggering ArgoCD sync
 └── README.md
 ```
 
-## 🛠️ Stack Configuration & Settings
+## 🚀 Workloads Managed via ArgoCD
 
-### 1. Observability Stack (`kube-prometheus-stack`)
-
-* **Storage:** Configured with `standard-rwo` StorageClass on GCP (20Gi Persistent Volume).
-* **Prometheus Operator:** Configured with open label selectors (`serviceMonitorSelectorNilUsesHelmValues: false`) to auto-discover all cluster monitors.
-* **Grafana Datasource:** Linked directly to internal DNS endpoint `http://prometheus-operated.monitoring.svc.cluster.local:9090` using HTTP `POST`.
-
-### 2. WireGuard UI
-
-* **Management UI:** `ngoduykhanh/wireguard-ui:latest` (v0.6.2).
-* **Service:** Exposed internally on port `51821/TCP` (mapped to container `5000/TCP`).
-* **Ingress:** NGINX managed with TLS termination on `vpn.andrei-test.lendo.dev`.
+| Application                 | Namespace      | Path / Helm Chart           | Description                                          |
+| --------------------------- | -------------- | --------------------------- | ---------------------------------------------------- |
+| **`wireguard-ui`**  | `default`    | `k8s-manifests/wireguard` | WireGuard VPN administration web interface           |
+| **`nasa-apod`**     | `default`    | `k8s-manifests/nasa-apod` | Microservice demonstrating external API integration  |
+| **`observability`** | `monitoring` | `kube-prometheus-stack`   | Prometheus metrics collector & Grafana visualization |
+| **`loki-stack`**    | `monitoring` | `loki-stack`              | Centralized log aggregation & LogQL querying         |
 
 ---
 
-## 🔐 Credentials Management
+## 🔄 CI/CD Pipeline Integration (Jenkins -> ArgoCD)
 
-| Service                | Default Username | Default Password      | Password Override Command                                                                            |
-| ---------------------- | ---------------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Grafana**      | `admin`        | `AdminPassword123!` | `kubectl get secret -n monitoring kube-prometheus-stack-grafana -o jsonpath="{.data.admin-password}" |
-| **WireGuard UI** | `admin`        | `AdminPassword123!` | Configured via`WGUI_PASSWORD` in `wireguard.yaml`                                                |
+The repository includes an automated pipeline (`Jenkinsfile_for_sync_argocd_trigger`) that decouples CI build steps from deployment execution by triggering ArgoCD sync operations securely over the internal cluster network.
 
----
+### Pipeline Workflow
 
-## 🔄 Cluster Pause & Resume Workflow (Cost Optimization)
+1. **SCM Checkout:** Pulls the latest Kubernetes manifest revision from `main`.
+2. **ArgoCD Hard Refresh:** Executes an authenticated REST API call (`/api/v1/applications/{app}?refresh=hard`) to force ArgoCD to fetch new Git commits immediately.
+3. **Application Sync:** Dispatches a POST request (`/api/v1/applications/{app}/sync`) targeting the `main` revision to prune deleted resources and apply new manifests seamlessly.
 
-To save GCP compute costs when the cluster is idle, scale the worker node pool down to `0` and back up on demand.
+### Security Configuration
 
-### Pause Cluster (Scale Nodes to 0)
-
-```bash
-gcloud container clusters resize gke-private-cluster \
-  --node-pool=nodepool-n2-standard-4 \
-  --zone=europe-north1-a \
-  --num-nodes=0
-```
-
-### Resume Cluster (Scale Nodes Back Up)
-
-```bash
-gcloud container clusters resize gke-private-cluster \
-  --node-pool=nodepool-n2-standard-4 \
-  --zone=europe-north1-a \
-  --num-nodes=1
-```
-
-Once nodes reach `Ready` status (`kubectl get nodes`), Kubernetes and ArgoCD will automatically restore all persistent volume claims and reschedule all pods.
-
-### Force ArgoCD Synchronization (If Required)
-
-```bash
-kubectl annotate application kube-prometheus-stack -n argocd argocd.argoproj.io/refresh=normal --overwrite
-kubectl annotate application wireguard-ui -n argocd argocd.argoproj.io/refresh=normal --overwrite
-```
+* **Authentication:** Dedicated ArgoCD service account token (`jenkins`) scoped via `argocd-rbac-cm` with minimal privileges (`get` and `sync` on target applications).
+* **Network Binding:** Communicates directly via cluster-internal DNS (`argocd-server.argocd.svc.cluster.local:80`).
+* **Secret Injection:** Injected safely using Jenkins Credentials binding (`argocd-jenkins-token`).
 
 ---
 
-## 📊 Verification & Diagnostics
+## ⚡ Manual Commands & Quickstart
+
+### Manually Refresh & Sync an Application via Curl
 
 ```bash
-# Check all running pods across namespaces
-kubectl get pods -A
+# Obtain your ArgoCD JWT token
+ARGOCD_TOKEN=$(kubectl get secret -n argocd argocd-jenkins-token -o jsonpath='{.data.token}' | base64 --decode)
 
-# Verify ArgoCD Application status
+# Hard refresh application state
+curl -s -X GET \
+  -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
+  "[http://argocd-server.argocd.svc.cluster.local:80/api/v1/applications/wireguard-ui?refresh=hard](http://argocd-server.argocd.svc.cluster.local:80/api/v1/applications/wireguard-ui?refresh=hard)"
+
+# Trigger Sync
+curl -s -X POST \
+  -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
+  -H "Content-Type: application/json" \
+  "[http://argocd-server.argocd.svc.cluster.local:80/api/v1/applications/wireguard-ui/sync](http://argocd-server.argocd.svc.cluster.local:80/api/v1/applications/wireguard-ui/sync)" \
+  -d '{"revision": "main", "prune": true}'
+```
+
+### Inspect Managed Applications
+
+```bash
 kubectl get applications -n argocd
-
-# Check ingress status and IP assignments
-kubectl get ingress -A
+kubectl get pods -n default
 ```
