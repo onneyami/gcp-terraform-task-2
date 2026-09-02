@@ -3,7 +3,6 @@ kind: Application
 metadata:
   name: kube-prometheus-stack
   namespace: argocd
-  # Prevents ArgoCD from getting stuck if CRDs take longer to initialize
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -11,37 +10,35 @@ spec:
   source:
     chart: kube-prometheus-stack
     repoURL: https://prometheus-community.github.io/helm-charts
-    targetRevision: 88.6.2 # Latest release version
+    targetRevision: 88.6.2
     helm:
       values: |
+        prometheusOperator:
+          prometheusConfigReloader:
+            resources:
+              limits:
+                cpu: 100m
+                memory: 100Mi
+        
         grafana:
           adminPassword: "AdminPassword123!"
-          ingress:
-            enabled: true
-            ingressClassName: nginx
-            annotations:
-              cert-manager.io/cluster-issuer: "letsencrypt-prod"
-            hosts:
-              - grafana.andrei-test.lendo.dev
-            tls:
-              - secretName: grafana-tls-cert
-                hosts:
-                  - grafana.andrei-test.lendo.dev
         
         prometheus:
           prometheusSpec:
             retention: 7d
+            # Select all ServiceMonitors/PodMonitors regardless of labels
+            serviceMonitorSelectorNilUsesHelmValues: false
+            podMonitorSelectorNilUsesHelmValues: false
+            ruleSelectorNilUsesHelmValues: false
             storageSpec:
               volumeClaimTemplate:
                 spec:
+                  storageClassName: standard-rwo
                   accessModes: ["ReadWriteOnce"]
                   resources:
                     requests:
                       storage: 20Gi
 
-        alertmanager:
-          enabled: true
-  
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
@@ -52,4 +49,4 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-      - ServerSideApply=true # Recommended for large CRDs installed by Prometheus Operator
+      - ServerSideApply=true
