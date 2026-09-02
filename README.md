@@ -1,168 +1,125 @@
+---
 
+# GKE GitOps Infrastructure & Observability Stack
 
-# Secure GitOps Pipeline on GKE: Jenkins, ArgoCD & Workload Identity
-
-![GCP](https://img.shields.io/badge/Google_Cloud-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
-![Jenkins](https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white)
-![ArgoCD](https://img.shields.io/badge/ArgoCD-EF7B4D?style=for-the-badge&logo=argo&logoColor=white)
-![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)
-
-A production-grade, keyless CI/CD GitOps workflow running on Google Kubernetes Engine (GKE). This project demonstrates automated infrastructure provisioning via Terraform, dynamic in-cluster Jenkins build agents using **GCP Workload Identity**, and continuous delivery with **ArgoCD**.
+This repository contains the declarative infrastructure and application manifests for managing a secure, private Google Kubernetes Engine (GKE) cluster using a full GitOps workflow powered by **ArgoCD**.
 
 ---
 
 ## 🏗️ Architecture Overview
 
-```text
-                                  +-------------------------------------------------+
-                                  |                 GKE Cluster                     |
-                                  |             (europe-north1-a)                   |
-                                  |                                                 |
-[Developer] --- 1. Push Code ---> | [Jenkins Master Pod]                            |
-                                  |        │                                        |
-                                  |   2. Spawns Ephemeral Agent                     |
-                                  |        ▼                                        |
-                                  | [Jenkins Agent Pod] ──3. Workload Identity────► [GCP APIs / GCS]
-                                  |  (jenkins-sa KSA)      (jenkins-gsa IAM)        |
-                                  |        │                                        |
-                                  |   4. Update Git Manifests                       |
-                                  |        ▼                                        |
-                                  | [ArgoCD Controller] ──5. Auto-Sync Manifests──► [App Deployment]
-                                  +-------------------------------------------------+
-```
+The platform consists of a private GKE cluster running microservices, operational tooling, and a complete observability stack—all managed declaratively through Git repository syncs.
 
-### Key Highlights
+* **Cluster Infrastructure:** GKE Private Cluster (`gke-private-cluster`) on `nodepool-n2-standard-4` worker nodes.
+* **GitOps Engine:** ArgoCD managing Helm releases and raw K8s manifests directly from Git.
+* **Networking & Ingress:** NGINX Ingress Controller with automated TLS certificates issued via `cert-manager` and Let's Encrypt.
+* **Observability:** `kube-prometheus-stack` (Prometheus, Grafana, Alertmanager, Node Exporter, kube-state-metrics).
+* **Workloads & Services:**
+  * **NASA APOD Application** (`nasa-apod`)
+  * **WireGuard UI** (`wireguard-ui`)
 
-* **Zero Static Keys:** Keyless GCP authentication using GKE Workload Identity (KSA `jenkins-sa` bound to GCP IAM `jenkins-gsa`).
-* **Pipeline as Code:** Declarative `Jenkinsfile` executed via dynamic Kubernetes pod templates.
-* **Cost Optimized:** Node pool autoscaling (`nodepool-n2-standard-4`) supporting 0-node scale-down for cost management.
-* **GitOps Deployment:** ArgoCD declarative application management with automated drift detection and reconciliation.
+---
+
+## 🚀 Managed Applications & Endpoints
+
+| Service                  | Endpoint Domain                                | Namespace      | Sync Source                                 |
+| :----------------------- | :--------------------------------------------- | :------------- | :------------------------------------------ |
+| **Grafana UI**     | `https://grafana.andrei-test.lendo.dev`      | `monitoring` | Helm (`kube-prometheus-stack` v88.6.2)    |
+| **Prometheus API** | `http://prometheus-operated.monitoring:9090` | `monitoring` | Operator CRD (`Prometheus`)               |
+| **WireGuard UI**   | `https://vpn.andrei-test.lendo.dev`          | `default`    | Git Manifests (`k8s-manifests/wireguard`) |
+| **NASA APOD API**  | `https://apod.andrei-test.lendo.dev`         | `default`    | Git Manifests (`k8s-manifests/nasa-apod`) |
 
 ---
 
 ## 📁 Repository Structure
 
 ```text
-gcp-terraform-task-2/
-├── Jenkinsfile                  # Production CI/CD declarative pipeline
-├── main.tf                      # Terraform infrastructure entrypoint
-├── gke.tf                       # GKE cluster & node pool definition
-├── iam.tf                       # GCP IAM bindings & Workload Identity setup
-├── k8s-manifests/               # Kubernetes manifests managed by ArgoCD
-│   ├── apod-deployment.yaml     # Application deployment specs
-│   └── service.yaml             # K8s Service definitions
-└── README.md                    # Project documentation
+.
+├── k8s-manifests/
+│   ├── observability-app.yaml     # ArgoCD Application for kube-prometheus-stack
+│   ├── wireguard-app.yaml         # ArgoCD Application for WireGuard UI
+│   ├── nasa-apod-app.yaml         # ArgoCD Application for NASA APOD
+│   └── wireguard/
+│       └── wireguard.yaml         # Deployment, Service, & Ingress for WireGuard UI
+├── terraform/                      # Infrastructure provisioner for GKE & GCP resources
+└── README.md
 ```
+
+## 🛠️ Stack Configuration & Settings
+
+### 1. Observability Stack (`kube-prometheus-stack`)
+
+* **Storage:** Configured with `standard-rwo` StorageClass on GCP (20Gi Persistent Volume).
+* **Prometheus Operator:** Configured with open label selectors (`serviceMonitorSelectorNilUsesHelmValues: false`) to auto-discover all cluster monitors.
+* **Grafana Datasource:** Linked directly to internal DNS endpoint `http://prometheus-operated.monitoring.svc.cluster.local:9090` using HTTP `POST`.
+
+### 2. WireGuard UI
+
+* **Management UI:** `ngoduykhanh/wireguard-ui:latest` (v0.6.2).
+* **Service:** Exposed internally on port `51821/TCP` (mapped to container `5000/TCP`).
+* **Ingress:** NGINX managed with TLS termination on `vpn.andrei-test.lendo.dev`.
 
 ---
 
-## 🚀 Live Environment Specs
+## 🔐 Credentials Management
 
-| Component                 | Target / URL                              |
-| ------------------------- | ----------------------------------------- |
-| **GCP Project ID**  | `andrei-innowise-tests-120826`          |
-| **GKE Region/Zone** | `europe-north1` / `europe-north1-a`   |
-| **Cluster Name**    | `gke-private-cluster`                   |
-| **Node Pool**       | `nodepool-n2-standard-4`                |
-| **Jenkins URL**     | `https://jenkins.andrei-test.lendo.dev` |
-| **NASA APOD App**   | `https://nasa.andrei-test.lendo.dev`    |
-| **Wireguard VPN**   | `https://vpn.andrei-test.lendo.dev`     |
+| Service                | Default Username | Default Password      | Password Override Command                                                                            |
+| ---------------------- | ---------------- | --------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Grafana**      | `admin`        | `AdminPassword123!` | `kubectl get secret -n monitoring kube-prometheus-stack-grafana -o jsonpath="{.data.admin-password}" |
+| **WireGuard UI** | `admin`        | `AdminPassword123!` | Configured via`WGUI_PASSWORD` in `wireguard.yaml`                                                |
 
 ---
 
-## 🔒 Security: Workload Identity Setup
+## 🔄 Cluster Pause & Resume Workflow (Cost Optimization)
 
-The pipeline operates completely keyless. Authentication between Kubernetes agents and Google Cloud APIs is established using Workload Identity Federation:
+To save GCP compute costs when the cluster is idle, scale the worker node pool down to `0` and back up on demand.
 
-1. **Kubernetes Service Account (KSA):** `jenkins-sa` in `jenkins` namespace.
-2. **GCP IAM Service Account (GSA):** `jenkins-gsa@andrei-innowise-tests-120826.iam.gserviceaccount.com`.
-3. **IAM Binding:**
-
-```bash
-gcloud iam service-accounts add-iam-policy-binding \
-  jenkins-gsa@andrei-innowise-tests-120826.iam.gserviceaccount.com \
-  --role="roles/iam.workloadIdentityUser" \
-  --member="serviceAccount:andrei-innowise-tests-120826.svc.id.goog[jenkins/jenkins-sa]"
-```
-
----
-
-## 🛠️ Operational Playbook
-
-### Pausing Cluster (Nightly Cost Control)
-
-To pause the worker nodes without destroying Terraform state or control plane configurations:
-
-```bash
-gcloud container node-pools update nodepool-n2-standard-4 \
-  --cluster=gke-private-cluster \
-  --zone=europe-north1-a \
-  --min-nodes=0 \
-  --max-nodes=0
-```
-
-*Or force immediate scale down:*
+### Pause Cluster (Scale Nodes to 0)
 
 ```bash
 gcloud container clusters resize gke-private-cluster \
   --node-pool=nodepool-n2-standard-4 \
   --zone=europe-north1-a \
   --num-nodes=0
+
 ```
 
-### Waking Up Infrastructure
-
-To bring the cluster back online:
+### Resume Cluster (Scale Nodes Back Up)
 
 ```bash
-gcloud container node-pools update nodepool-n2-standard-4 \
-  --cluster=gke-private-cluster \
+gcloud container clusters resize gke-private-cluster \
+  --node-pool=nodepool-n2-standard-4 \
   --zone=europe-north1-a \
-  --min-nodes=1 \
-  --max-nodes=3
+  --num-nodes=1
+
 ```
 
-### Verification Commands
+Once nodes reach `Ready` status (`kubectl get nodes`), Kubernetes and ArgoCD will automatically restore all persistent volume claims and reschedule all pods.
+
+### Force ArgoCD Synchronization (If Required)
 
 ```bash
-# Check worker node status
-kubectl get nodes
+kubectl annotate application kube-prometheus-stack -n argocd argocd.argoproj.io/refresh=normal --overwrite
+kubectl annotate application wireguard-ui -n argocd argocd.argoproj.io/refresh=normal --overwrite
 
-# Check Jenkins & ArgoCD workloads
-kubectl get pods -n jenkins
-kubectl get pods -n argocd
 ```
-
-```markdown
-# Secure GitOps Pipeline on GKE: Jenkins, ArgoCD & Workload Identity
-
-![GCP](https://img.shields.io/badge/Google_Cloud-4285F4?style=for-the-badge&logo=google-cloud&logoColor=white)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white)
-![Jenkins](https://img.shields.io/badge/Jenkins-D24939?style=for-the-badge&logo=jenkins&logoColor=white)
-![ArgoCD](https://img.shields.io/badge/ArgoCD-EF7B4D?style=for-the-badge&logo=argo&logoColor=white)
-![Terraform](https://img.shields.io/badge/Terraform-7B42BC?style=for-the-badge&logo=terraform&logoColor=white)
-
-A production-grade, keyless CI/CD GitOps workflow running on Google Kubernetes Engine (GKE). This project demonstrates automated infrastructure provisioning via Terraform, dynamic in-cluster Jenkins build agents using **GCP Workload Identity**, and continuous delivery with **ArgoCD**.
 
 ---
 
-## 🏗️ Architecture Overview
+## 📊 Verification & Diagnostics
 
-```text
-                                  +-------------------------------------------------+
-                                  |                 GKE Cluster                     |
-                                  |             (europe-north1-a)                   |
-                                  |                                                 |
-[Developer] --- 1. Push Code ---> | [Jenkins Master Pod]                            |
-                                  |        │                                        |
-                                  |   2. Spawns Ephemeral Agent                     |
-                                  |        ▼                                        |
-                                  | [Jenkins Agent Pod] ──3. Workload Identity────► [GCP APIs / GCS]
-                                  |  (jenkins-sa KSA)      (jenkins-gsa IAM)        |
-                                  |        │                                        |
-                                  |   4. Update Git Manifests                       |
-                                  |        ▼                                        |
-                                  | [ArgoCD Controller] ──5. Auto-Sync Manifests──► [App Deployment]
-                                  +-------------------------------------------------+
+```bash
+# Check all running pods across namespaces
+kubectl get pods -A
+
+# Verify ArgoCD Application status
+kubectl get applications -n argocd
+
+# Check ingress status and IP assignments
+kubectl get ingress -A
+
+```
+
+```
+
 ```
