@@ -20,21 +20,21 @@ pipeline {
                 script {
                     echo "Triggering hard refresh and sync for ${env.ARGOCD_APP_NAME}..."
                     sh """
-                        # 1. Hard refresh application state
+                        # 1. Hard refresh application state (forces ArgoCD to fetch latest Git commits)
                         echo "Refreshing application..."
-                        curl -s -v -X GET \\
+                        curl -s -f -X GET \\
                           -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
                           "http://${env.ARGOCD_SERVER}/api/v1/applications/${env.ARGOCD_APP_NAME}?refresh=hard" > /dev/null
 
                         sleep 2
 
-                        # 2. Trigger Application Sync (JSON payload strictly enclosed in single quotes)
+                        # 2. Trigger Application Sync (targeting 'main')
                         echo "Triggering sync..."
-                        curl -s -i -X POST \\
+                        curl -s -f -X POST \\
                           -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
                           -H "Content-Type: application/json" \\
                           "http://${env.ARGOCD_SERVER}/api/v1/applications/${env.ARGOCD_APP_NAME}/sync" \\
-                          -d '{"revision": "HEAD", "prune": true}'
+                          -d '{"revision": "main", "prune": true}'
                     """
                 }
             }
