@@ -13,20 +13,37 @@ spec:
     targetRevision: 88.6.2
     helm:
       values: |
-        prometheusOperator:
-          prometheusConfigReloader:
-            resources:
-              limits:
-                cpu: 100m
-                memory: 100Mi
-        
         grafana:
           adminPassword: "AdminPassword123!"
-        
+          ingress:
+            enabled: true
+            ingressClassName: nginx
+            annotations:
+              cert-manager.io/cluster-issuer: "letsencrypt-prod"
+            hosts:
+              - grafana.andrei-test.lendo.dev
+            tls:
+              - secretName: grafana-tls-cert
+                hosts:
+                  - grafana.andrei-test.lendo.dev
+          sidecar:
+            datasources:
+              enabled: true
+              defaultDatasourceEnabled: false
+          additionalDataSources:
+            - name: Prometheus
+              type: prometheus
+              uid: prometheus
+              access: proxy
+              url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+              isDefault: true
+              jsonData:
+                httpMethod: POST
+                timeInterval: 15s
+
         prometheus:
           prometheusSpec:
             retention: 7d
-            # Select all ServiceMonitors/PodMonitors regardless of labels
             serviceMonitorSelectorNilUsesHelmValues: false
             podMonitorSelectorNilUsesHelmValues: false
             ruleSelectorNilUsesHelmValues: false
