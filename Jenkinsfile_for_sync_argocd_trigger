@@ -32,8 +32,8 @@ spec:
             steps {
                 container('argocd-cli') {
                     script {
-                        echo "Refreshing ArgoCD state for ${ARGOCD_APP_NAME}..."
-                        sh """
+                        echo "Refreshing ArgoCD state for ${env.ARGOCD_APP_NAME}..."
+                        sh '''
                             # Refresh ArgoCD state
                             argocd app get ${ARGOCD_APP_NAME} \
                               --server ${ARGOCD_SERVER} \
@@ -47,7 +47,7 @@ spec:
                               --auth-token ${ARGOCD_TOKEN} \
                               --insecure \
                               --prune
-                        """
+                        '''
                     }
                 }
             }
@@ -57,15 +57,15 @@ spec:
             steps {
                 container('argocd-cli') {
                     script {
-                        echo "Waiting for ${ARGOCD_APP_NAME} to become Healthy..."
-                        sh """
+                        echo "Waiting for ${env.ARGOCD_APP_NAME} to become Healthy..."
+                        sh '''
                             argocd app wait ${ARGOCD_APP_NAME} \
                               --server ${ARGOCD_SERVER} \
                               --auth-token ${ARGOCD_TOKEN} \
                               --insecure \
                               --health \
                               --timeout 300
-                        """
+                        '''
                     }
                 }
             }
@@ -74,10 +74,10 @@ spec:
 
     post {
         success {
-            echo "Successfully synced ${ARGOCD_APP_NAME} in ArgoCD!"
+            echo "Successfully triggered ArgoCD sync!"
         }
         failure {
-            echo "Failed to sync ${ARGOCD_APP_NAME} in ArgoCD."
+            echo "Failed to trigger ArgoCD sync."
         }
     }
 }
