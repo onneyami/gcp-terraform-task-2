@@ -1,0 +1,79 @@
+pipeline {
+    agent any
+
+    environment {
+        // Correct internal ClusterIP DNS for ArgoCD API Server
+        ARGOCD_APP_NAME = 'wireguard-ui'
+        ARGOCD_SERVER   = 'argocd-server.argocd.svc.cluster.local:443'
+        ARGOCD_TOKEN    = credentials('argocd-jenkins-token')
+    }
+
+    stages {
+        stage('Checkout Manifests') {
+            steps {
+                echo "Pulling latest wireguard-ui manifests from Git..."
+                checkout scm
+            }
+        }
+
+        stage('Trigger ArgoCD Sync') {
+            agent {
+                docker {
+                    image 'argoproj/argocd:v2.10.4'
+                    args '-u 0'
+                }
+            }
+            steps {
+                script {
+                    echo "Refreshing ArgoCD state for ${ARGOCD_APP_NAME}..."
+                    sh """
+                        # Force refresh ArgoCD state to detect new Git commits
+                        argocd app get ${ARGOCD_APP_NAME} \
+                          --server ${ARGOCD_SERVER} \
+                          --auth-token ${ARGOCD_TOKEN} \
+                          --insecure \
+                          --refresh
+                        
+                        # Trigger sync
+                        argocd app sync ${ARGOCD_APP_NAME} \
+                          --server ${ARGOCD_SERVER} \
+                          --auth-token ${ARGOCD_TOKEN} \
+                          --insecure \
+                          --prune
+                    """
+                }
+            }
+        }
+
+        stage('Wait for Sync & Health') {
+            agent {
+                docker {
+                    image 'argoproj/argocd:v2.10.4'
+                    args '-u 0'
+                }
+            }
+            steps {
+                script {
+                    echo "Waiting for ${ARGOCD_APP_NAME} to become Healthy..."
+                    sh """
+                        argocd app wait ${ARGOCD_APP_NAME} \
+                          --server ${ARGOCD_SERVER} \
+                          --auth-token ${ARGOCD_TOKEN} \
+                          --insecure \
+                          --health \
+                          --timeout 300
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Successfully synced ${ARGOCD_APP_NAME} in ArgoCD!"
+        }
+        failure {
+            echo "Failed to sync ${ARGOCD_APP_NAME} in ArgoCD."
+        }
+    }
+}
