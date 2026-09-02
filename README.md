@@ -1,11 +1,8 @@
 ---
-
 # GKE GitOps Infrastructure & Observability Stack
 
 This repository contains the declarative infrastructure and application manifests for managing a secure, private Google Kubernetes Engine (GKE) cluster using a full GitOps workflow powered by **ArgoCD**.
-
 ---
-
 ## 🏗️ Architecture Overview
 
 The platform consists of a private GKE cluster running microservices, operational tooling, and a complete observability stack—all managed declaratively through Git repository syncs.
@@ -81,7 +78,6 @@ gcloud container clusters resize gke-private-cluster \
   --node-pool=nodepool-n2-standard-4 \
   --zone=europe-north1-a \
   --num-nodes=0
-
 ```
 
 ### Resume Cluster (Scale Nodes Back Up)
@@ -91,7 +87,6 @@ gcloud container clusters resize gke-private-cluster \
   --node-pool=nodepool-n2-standard-4 \
   --zone=europe-north1-a \
   --num-nodes=1
-
 ```
 
 Once nodes reach `Ready` status (`kubectl get nodes`), Kubernetes and ArgoCD will automatically restore all persistent volume claims and reschedule all pods.
@@ -101,7 +96,6 @@ Once nodes reach `Ready` status (`kubectl get nodes`), Kubernetes and ArgoCD wil
 ```bash
 kubectl annotate application kube-prometheus-stack -n argocd argocd.argoproj.io/refresh=normal --overwrite
 kubectl annotate application wireguard-ui -n argocd argocd.argoproj.io/refresh=normal --overwrite
-
 ```
 
 ---
@@ -117,9 +111,4 @@ kubectl get applications -n argocd
 
 # Check ingress status and IP assignments
 kubectl get ingress -A
-
-```
-
-```
-
 ```
