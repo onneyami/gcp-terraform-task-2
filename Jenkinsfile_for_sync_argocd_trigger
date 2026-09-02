@@ -1,18 +1,5 @@
 pipeline {
-    agent {
-        kubernetes {
-            yaml '''
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: argocd-cli
-    image: quay.io/argoproj/argocd:v2.10.4
-    command: ['cat']
-    tty: true
-'''
-        }
-    }
+    agent any
 
     environment {
         ARGOCD_APP_NAME = 'wireguard-ui'
@@ -28,45 +15,27 @@ spec:
             }
         }
 
-        stage('Trigger ArgoCD Sync') {
+        stage('Trigger ArgoCD Refresh & Sync') {
             steps {
-                container('argocd-cli') {
-                    script {
-                        echo "Refreshing ArgoCD state for ${env.ARGOCD_APP_NAME}..."
-                        sh '''
-                            # Refresh ArgoCD state
-                            argocd app get ${ARGOCD_APP_NAME} \
-                              --server ${ARGOCD_SERVER} \
-                              --auth-token ${ARGOCD_TOKEN} \
-                              --insecure \
-                              --refresh
+                script {
+                    echo "Triggering hard refresh and sync for ${env.ARGOCD_APP_NAME}..."
+                    sh '''
+                        # 1. Force ArgoCD to refresh Git repository state
+                        echo "Refreshing application..."
+                        curl -k -s -X GET \
+                          -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
+                          "https://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP_NAME}?refresh=hard" > /dev/null
 
-                            # Trigger application sync
-                            argocd app sync ${ARGOCD_APP_NAME} \
-                              --server ${ARGOCD_SERVER} \
-                              --auth-token ${ARGOCD_TOKEN} \
-                              --insecure \
-                              --prune
-                        '''
-                    }
-                }
-            }
-        }
+                        sleep 2
 
-        stage('Wait for Sync & Health') {
-            steps {
-                container('argocd-cli') {
-                    script {
-                        echo "Waiting for ${env.ARGOCD_APP_NAME} to become Healthy..."
-                        sh '''
-                            argocd app wait ${ARGOCD_APP_NAME} \
-                              --server ${ARGOCD_SERVER} \
-                              --auth-token ${ARGOCD_TOKEN} \
-                              --insecure \
-                              --health \
-                              --timeout 300
-                        '''
-                    }
+                        # 2. Trigger Application Sync
+                        echo "Triggering sync..."
+                        curl -k -s -X POST \
+                          -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
+                          -H "Content-Type: application/json" \
+                          "https://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP_NAME}/sync" \
+                          -d '{"revision": "HEAD", "prune": true}'
+                    '''
                 }
             }
         }
@@ -74,7 +43,7 @@ spec:
 
     post {
         success {
-            echo "Successfully triggered ArgoCD sync!"
+            echo "Successfully triggered ArgoCD sync for ${env.ARGOCD_APP_NAME}!"
         }
         failure {
             echo "Failed to trigger ArgoCD sync."
