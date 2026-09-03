@@ -15,23 +15,17 @@ spec:
       labels:
         app: wireguard-ui
     spec:
-      # Removed securityContext.sysctls to prevent SysctlForbidden
       volumes:
         - name: wireguard-config
           emptyDir: {}
-        - name: lib-modules
-          hostPath:
-            path: /lib/modules
       containers:
-        # 1. WireGuard Server
+        # 1. WireGuard Server (Handles UDP VPN traffic & NAT)
         - name: wireguard-server
           image: linuxserver/wireguard:latest
           securityContext:
-            privileged: true  # Allows kernel module loading & IP forwarding setup
             capabilities:
               add:
                 - NET_ADMIN
-                - SYS_MODULE
           env:
             - name: PUID
               value: "1000"
@@ -45,9 +39,12 @@ spec:
               value: "0"
             - name: PEERDNS
               value: "1.1.1.1"
-            # Explicitly enable sysctl inside POSTUP at container runtime
+            # Crucial for GKE COS nodes: runs wireguard in userspace mode
+            - name: WG_I_PREFER_BUGGY_USERSPACE_TO_NO_WIREGUARD
+              value: "true"
+            # Automatic NAT forwarding rules applied on interface startup
             - name: POSTUP
-              value: "sysctl -w net.ipv4.ip_forward=1; iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
+              value: "iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
             - name: POSTDOWN
               value: "iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
           ports:
@@ -57,11 +54,8 @@ spec:
           volumeMounts:
             - name: wireguard-config
               mountPath: /etc/wireguard
-            - name: lib-modules
-              mountPath: /lib/modules
-              readOnly: true
 
-        # 2. WireGuard UI
+        # 2. WireGuard UI (Web Management Dashboard)
         - name: wireguard-ui
           image: ngoduykhanh/wireguard-ui:latest
           imagePullPolicy: IfNotPresent
@@ -84,6 +78,7 @@ spec:
               mountPath: /etc/wireguard
 
 ---
+# Service for Web UI (HTTP traffic via Ingress)
 apiVersion: v1
 kind: Service
 metadata:
@@ -102,6 +97,7 @@ spec:
     app: wireguard-ui
 
 ---
+# LoadBalancer Service for WireGuard UDP VPN Traffic
 apiVersion: v1
 kind: Service
 metadata:
@@ -111,6 +107,8 @@ metadata:
     app: wireguard-ui
 spec:
   type: LoadBalancer
+  loadBalancerSourceRanges:
+    - "0.0.0.0/0"
   ports:
     - port: 51820
       targetPort: 51820
@@ -120,6 +118,7 @@ spec:
     app: wireguard-ui
 
 ---
+# Ingress for Web UI Access
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
