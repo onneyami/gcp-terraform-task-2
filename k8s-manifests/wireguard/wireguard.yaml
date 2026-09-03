@@ -18,6 +18,13 @@ spec:
       volumes:
         - name: wireguard-config
           emptyDir: {}
+      # Init container sets IP forwarding without triggering GKE SysctlForbidden
+      initContainers:
+        - name: enable-sysctl
+          image: busybox:1.36
+          command: ["sh", "-c", "sysctl -w net.ipv4.ip_forward=1"]
+          securityContext:
+            privileged: true
       containers:
         # 1. WireGuard Server Container
         - name: wireguard-server
@@ -26,6 +33,7 @@ spec:
             capabilities:
               add:
                 - NET_ADMIN
+                - SYS_MODULE
           env:
             - name: PUID
               value: "1000"
