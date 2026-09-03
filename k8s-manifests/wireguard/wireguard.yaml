@@ -19,7 +19,7 @@ spec:
         - name: wireguard-config
           emptyDir: {}
       containers:
-        # 1. WireGuard Server (Handles UDP VPN traffic & NAT)
+        # 1. WireGuard Server Container
         - name: wireguard-server
           image: linuxserver/wireguard:latest
           securityContext:
@@ -39,10 +39,8 @@ spec:
               value: "0"
             - name: PEERDNS
               value: "1.1.1.1"
-            # Crucial for GKE COS nodes: runs wireguard in userspace mode
             - name: WG_I_PREFER_BUGGY_USERSPACE_TO_NO_WIREGUARD
               value: "true"
-            # Automatic NAT forwarding rules applied on interface startup
             - name: POSTUP
               value: "iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
             - name: POSTDOWN
@@ -55,7 +53,7 @@ spec:
             - name: wireguard-config
               mountPath: /etc/wireguard
 
-        # 2. WireGuard UI (Web Management Dashboard)
+        # 2. WireGuard Web UI Container
         - name: wireguard-ui
           image: ngoduykhanh/wireguard-ui:latest
           imagePullPolicy: IfNotPresent
@@ -78,7 +76,7 @@ spec:
               mountPath: /etc/wireguard
 
 ---
-# Service for Web UI (HTTP traffic via Ingress)
+# Internal Service for WireGuard Web UI
 apiVersion: v1
 kind: Service
 metadata:
@@ -97,7 +95,7 @@ spec:
     app: wireguard-ui
 
 ---
-# LoadBalancer Service for WireGuard UDP VPN Traffic
+# LoadBalancer Service for UDP VPN Traffic
 apiVersion: v1
 kind: Service
 metadata:
@@ -107,6 +105,7 @@ metadata:
     app: wireguard-ui
 spec:
   type: LoadBalancer
+  externalTrafficPolicy: Cluster
   loadBalancerSourceRanges:
     - "0.0.0.0/0"
   ports:
