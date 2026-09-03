@@ -15,26 +15,17 @@ pipeline {
             }
         }
 
-        stage('Trigger ArgoCD Refresh & Sync') {
+        stage('Trigger ArgoCD Sync') {
             steps {
                 script {
-                    echo "Triggering hard refresh and sync for ${env.ARGOCD_APP_NAME}..."
+                    echo "Triggering direct sync for ${env.ARGOCD_APP_NAME}..."
                     sh """
-                        # 1. Hard refresh application state (forces ArgoCD to fetch latest Git commits)
-                        echo "Refreshing application..."
-                        curl -s -f -X GET \\
-                          -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
-                          "http://${env.ARGOCD_SERVER}/api/v1/applications/${env.ARGOCD_APP_NAME}?refresh=hard" > /dev/null
-
-                        sleep 2
-
-                        # 2. Trigger Application Sync (targeting 'main')
-                        echo "Triggering sync..."
+                        # Trigger Application Sync directly via REST API
                         curl -s -f -X POST \\
                           -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
                           -H "Content-Type: application/json" \\
                           "http://${env.ARGOCD_SERVER}/api/v1/applications/${env.ARGOCD_APP_NAME}/sync" \\
-                          -d '{"revision": "main", "prune": true}'
+                          -d '{"revision": "main", "prune": true, "dryRun": false}'
                     """
                 }
             }
