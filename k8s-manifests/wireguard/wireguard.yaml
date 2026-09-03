@@ -68,9 +68,9 @@ spec:
             - name: WGUI_PASSWORD
               value: "AdminPassword123!"
             - name: WGUI_MANAGE_START
-              value: "true"
+              value: "false"
             - name: WGUI_MANAGE_RESTART
-              value: "true"
+              value: "false"
           volumeMounts:
             - name: wireguard-config
               mountPath: /etc/wireguard
