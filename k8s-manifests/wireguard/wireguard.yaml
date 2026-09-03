@@ -15,7 +15,56 @@ spec:
       labels:
         app: wireguard-ui
     spec:
+      # Required sysctl for IP forwarding inside the pod
+      securityContext:
+        sysctls:
+          - name: net.ipv4.ip_forward
+            value: "1"
+      volumes:
+        - name: wireguard-config
+          emptyDir: {}
+        - name: lib-modules
+          hostPath:
+            path: /lib/modules
       containers:
+        # 1. WireGuard Server (Handles actual VPN tunnels & routing)
+        - name: wireguard-server
+          image: linuxserver/wireguard:latest
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - SYS_MODULE
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "UTC"
+            - name: SERVERPORT
+              value: "51820"
+            - name: PEERS
+              value: "0"
+            - name: PEERDNS
+              value: "1.1.1.1"
+            # NAT rules to forward client traffic out to GKE/Internet
+            - name: POSTUP
+              value: "iptables -A FORWARD -i %i -j ACCEPT; iptables -A FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
+            - name: POSTDOWN
+              value: "iptables -D FORWARD -i %i -j ACCEPT; iptables -D FORWARD -o %i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE"
+          ports:
+            - containerPort: 51820
+              name: wireguard-udp
+              protocol: UDP
+          volumeMounts:
+            - name: wireguard-config
+              mountPath: /etc/wireguard
+            - name: lib-modules
+              mountPath: /lib/modules
+              readOnly: true
+
+        # 2. WireGuard UI (Web Admin Interface)
         - name: wireguard-ui
           image: ngoduykhanh/wireguard-ui:latest
           imagePullPolicy: IfNotPresent
@@ -29,7 +78,16 @@ spec:
               value: "admin"
             - name: WGUI_PASSWORD
               value: "AdminPassword123!"
+            - name: WGUI_MANAGE_START
+              value: "true"
+            - name: WGUI_MANAGE_RESTART
+              value: "true"
+          volumeMounts:
+            - name: wireguard-config
+              mountPath: /etc/wireguard
+
 ---
+# Service for Web UI (HTTP traffic via Ingress)
 apiVersion: v1
 kind: Service
 metadata:
@@ -40,13 +98,34 @@ metadata:
 spec:
   type: ClusterIP
   ports:
-    - port: 51821
+    - port: 5000
       targetPort: 5000
       protocol: TCP
       name: http
   selector:
     app: wireguard-ui
+
 ---
+# LoadBalancer Service for WireGuard UDP VPN Traffic
+apiVersion: v1
+kind: Service
+metadata:
+  name: wireguard-udp-service
+  namespace: default
+  labels:
+    app: wireguard-ui
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 51820
+      targetPort: 51820
+      protocol: UDP
+      name: wireguard-udp
+  selector:
+    app: wireguard-ui
+
+---
+# Ingress for Web UI Access
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -70,4 +149,4 @@ spec:
               service:
                 name: wireguard-ui-service
                 port:
-                  number: 51821
+                  number: 5000
