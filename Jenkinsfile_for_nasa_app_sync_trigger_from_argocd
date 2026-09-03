@@ -18,14 +18,24 @@ pipeline {
         stage('Trigger ArgoCD Sync') {
             steps {
                 script {
-                    echo "Triggering direct sync for ${env.ARGOCD_APP_NAME}..."
+                    echo "Triggering sync for ${env.ARGOCD_APP_NAME}..."
                     sh """
-                        # Trigger Application Sync directly via REST API
-                        curl -s -f -X POST \\
+                        RESPONSE_FILE=\$(mktemp)
+                        
+                        HTTP_STATUS=\$(curl -s -o "\$RESPONSE_FILE" -w "%{http_code}" -X POST \\
                           -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
                           -H "Content-Type: application/json" \\
                           "http://${env.ARGOCD_SERVER}/api/v1/applications/${env.ARGOCD_APP_NAME}/sync" \\
-                          -d '{"revision": "main", "prune": true, "dryRun": false}'
+                          -d '{"revision": "main", "prune": true}')
+
+                        echo "ArgoCD API HTTP Status: \$HTTP_STATUS"
+                        echo "Response Body:"
+                        cat "\$RESPONSE_FILE"
+                        echo ""
+
+                        if [ "\$HTTP_STATUS" -lt 200 ] || [ "\$HTTP_STATUS" -gte 300 ]; then
+                            exit 1
+                        fi
                     """
                 }
             }
