@@ -1,0 +1,54 @@
+pipeline {
+    agent any
+
+    environment {
+        ARGOCD_SERVER   = 'argocd-server.argocd.svc.cluster.local' // Internal K8s service address
+        APP_NAME        = 'apod-api'
+        ARGOCD_AUTH_TOKEN = credentials('argocd-jenkins-token')
+    }
+
+    stages {
+        stage('Validate Manifests') {
+            steps {
+                echo "Validating Kubernetes manifests..."
+                sh 'kubectl dry-run=client -f k8s-manifests/apod/ --recursive'
+            }
+        }
+
+        stage('Trigger ArgoCD Sync') {
+            agent {
+                docker {
+                    image 'argoproj/argocd:v2.10.0'
+                    args '--entrypoint=""'
+                }
+            }
+            steps {
+                echo "Triggering ArgoCD sync for ${APP_NAME}..."
+                sh '''
+                    # 1. Sync the application
+                    argocd app sync ${APP_NAME} \
+                      --server ${ARGOCD_SERVER} \
+                      --auth-token ${ARGOCD_AUTH_TOKEN} \
+                      --insecure
+
+                    # 2. Wait for application to reach Healthy and Synced state
+                    argocd app wait ${APP_NAME} \
+                      --server ${ARGOCD_SERVER} \
+                      --auth-token ${ARGOCD_AUTH_TOKEN} \
+                      --insecure \
+                      --health \
+                      --sync
+                '''
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "Successfully synced ${APP_NAME} in ArgoCD!"
+        }
+        failure {
+            echo "ArgoCD sync failed for ${APP_NAME}."
+        }
+    }
+}
