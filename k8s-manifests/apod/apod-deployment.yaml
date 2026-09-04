@@ -1,4 +1,6 @@
-# this manifest creates pods of the APOD API application. It specifies the number of replicas, the container image to use, and the resource requests and limits for CPU and memory. The deployment also includes labels for identifying the pods and a selector for matching the pods with the corresponding service.
+# This manifest creates pods of the APOD API application.
+# It specifies the number of replicas, container image, resource requests/limits,
+# health probes, and runtime script configuration.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -6,6 +8,8 @@ metadata:
   namespace: default
   labels:
     app: apod-api
+  annotations:
+    pipeline.test/sync-trigger: "v1.0.0"
 spec:
   replicas: 2
   selector:
@@ -144,7 +148,7 @@ spec:
                   <body>
                     <header>
                       <h1>🌌 NASA Astronomy Picture of the Day</h1>
-                      <div class="subtitle">Deployed in Google Kubernetes Engine (GKE)</div>
+                      <div class="subtitle">Deployed in GKE via ArgoCD & Jenkins GitOps</div>
                     </header>
 
                     <div class="card" id="app">
@@ -169,7 +173,6 @@ spec:
                               </div>
                             \`;
                           } else {
-                            // Проксируем внешнюю картинку через SSL CDN, чтобы не было CORS/Mixed-Content блокировок
                             let safeImgUrl = 'https://images.weserv.nl/?url=' + encodeURIComponent(rawUrl);
                             mediaHtml = \`<img src="\${safeImgUrl}" alt="\${data.title}" onError="this.onerror=null; this.src='\${rawUrl}';" />\`;
                           }
@@ -202,6 +205,18 @@ spec:
               node server.js
           ports:
             - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
           resources:
             requests:
               cpu: 50m
