@@ -19,7 +19,7 @@ pipeline {
             steps {
                 script {
                     echo "Triggering sync for ${env.ARGOCD_APP_NAME}..."
-                    sh """
+                    sh """#!/bin/bash
                         RESPONSE_FILE=\$(mktemp)
                         
                         HTTP_STATUS=\$(curl -s -o "\$RESPONSE_FILE" -w "%{http_code}" -X POST \\
@@ -33,7 +33,8 @@ pipeline {
                         cat "\$RESPONSE_FILE"
                         echo ""
 
-                        if [ "\$HTTP_STATUS" -lt 200 ] || [ "\$HTTP_STATUS" -gte 300 ]; then
+                        if [ "\$HTTP_STATUS" -ne 200 ]; then
+                            echo "ERROR: ArgoCD sync failed with HTTP status \$HTTP_STATUS"
                             exit 1
                         fi
                     """
