@@ -6,6 +6,11 @@ pipeline {
         ARGOCD_TOKEN  = credentials('argocd-jenkins-token')
     }
 
+    triggers {
+        // Enables automatic triggers when GitHub sends a push webhook
+        githubPush()
+    }
+
     stages {
         stage('Checkout Manifests') {
             steps {
@@ -22,7 +27,6 @@ pipeline {
 
                         echo "Fetching list of all registered ArgoCD applications..."
                         
-                        # 1. Retrieve all app names using ArgoCD REST API
                         APP_LIST_FILE=\$(mktemp)
                         
                         HTTP_STATUS=\$(curl -s -o "\$APP_LIST_FILE" -w "%{http_code}" -X GET \\
@@ -35,19 +39,18 @@ pipeline {
                             exit 1
                         fi
 
-                        # Parse app names using grep/sed (avoids dependency on jq)
-                        APP_NAMES=\$(grep -o '"name":"[^"]*"' "\$APP_LIST_FILE" | head -n 50 | cut -d'"' -f4 | sort -u)
+                        # Extract application metadata names cleanly using sed regex
+                        APP_NAMES=\$(grep -o '"metadata":{[^}]*"name":"[^"]*"' "\$APP_LIST_FILE" | sed -E 's/.*"name":"([^"]+)".*/\1/' | sort -u)
 
+                        # Fallback parsing in case the metadata string formatting varies
                         if [ -z "\$APP_NAMES" ]; then
-                            echo "No applications found in ArgoCD."
-                            exit 0
+                            APP_NAMES=\$(sed -E 's/"name":"([^"]+)"/\1\n/g' "\$APP_LIST_FILE" | grep -v '^{"apiVersion"' | grep -v 'argocd' | sort -u)
                         fi
 
-                        echo "Found applications to sync:"
+                        echo "Discovered applications to sync:"
                         echo "\$APP_NAMES"
                         echo "--------------------------------------------------"
 
-                        # 2. Iterate and trigger sync for each application
                         for APP in \$APP_NAMES; do
                             echo "--> Triggering sync for application: \$APP"
                             
@@ -60,9 +63,9 @@ pipeline {
                               -d '{"revision": "main", "prune": true}')
 
                             if [ "\$SYNC_STATUS" -eq 200 ]; then
-                                echo "    Successfully triggered sync for \$APP"
+                                echo "    [OK] Successfully triggered sync for \$APP"
                             else
-                                echo "    WARNING: Sync failed for \$APP (HTTP \$SYNC_STATUS)"
+                                echo "    [WARNING] Sync returned HTTP \$SYNC_STATUS for \$APP"
                                 cat "\$SYNC_RESPONSE_FILE"
                                 echo ""
                             fi
@@ -75,7 +78,7 @@ pipeline {
 
     post {
         success {
-            echo "Successfully triggered sync cycle for all ArgoCD applications!"
+            echo "Successfully triggered ArgoCD sync cycle for all applications!"
         }
         failure {
             echo "Failed to trigger ArgoCD sync cycle."
