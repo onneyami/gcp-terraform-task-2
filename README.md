@@ -10,63 +10,63 @@ This repository manages Google Kubernetes Engine (GKE) applications and infrastr
 * **Cloud Provider**: Google Cloud Platform (GCP) — Google Kubernetes Engine (GKE)
 * **Ingress & TLS**: NGINX Ingress Controller with `cert-manager` (Let's Encrypt CA)
 * **GitOps Engine**: ArgoCD (automated `selfHeal` and `prune`)
-* **CI/CD Pipeline**: Jenkins (REST API trigger for ArgoCD application syncs)
+* **CI/CD Orchestration**: Jenkins (Automated multi-app REST API triggers)
 
 ---
 
 ## 📦 Deployed Applications
 
-| Application                  | Public URL / Endpoint                                 | Namespace   | GitOps Manifest Path         |
-| :--------------------------- | :---------------------------------------------------- | :---------- | :--------------------------- |
-| **WireGuard VPN & UI** | `https://vpn.andrei-test.lendo.dev` / `UDP 51820` | `default` | `k8s-manifests/wireguard/` |
-| **NASA APOD API**      | `https://nasa.andrei-test.lendo.dev`                | `default` | `k8s-manifests/apod/`      |
+| Application                     | Type               | Public URL / Endpoint                                 | Namespace          | GitOps Source Path               |
+| :------------------------------ | :----------------- | :---------------------------------------------------- | :----------------- | :------------------------------- |
+| **NASA APOD API**         | Node.js App        | `https://nasa.andrei-test.lendo.dev`                | `default`        | `k8s-manifests/apod/`          |
+| **WireGuard VPN & UI**    | Security / Network | `https://vpn.andrei-test.lendo.dev` / `UDP 51820` | `default`        | `k8s-manifests/wireguard/`     |
+| **Guestbook Demo**        | Sample App         | Internal                                              | `guestbook-demo` | `argoproj/argocd-example-apps` |
+| **Kube-Prometheus-Stack** | Monitoring         | Internal                                              | `monitoring`     | Helm Chart (`88.6.2`)          |
 
 ---
 
-## 🔒 WireGuard VPN Configuration
+## 🚀 Automated Multi-App GitOps Pipeline
 
-The WireGuard server runs in GKE and provides a secure egress tunnel for client traffic.
-
-### Features & Security Settings
-
-* **IP Forwarding**: Privileged `initContainer` enables `net.ipv4.ip_forward=1` inside the pod network namespace (bypassing GKE `SysctlForbidden` restrictions).
-* **NAT Masquerading**: `iptables` rules automatically route client traffic (`wg0` $\rightarrow$ `eth0`).
-* **Selective Routing**: Mac WireGuard client configurations exclude the GKE Control Plane IP to prevent `kubectl` connectivity timeouts.
-
----
-
-## 🚀 GitOps & CI/CD Automation
-
-### ArgoCD Synchronization
-
-Applications are defined as ArgoCD custom resources in `k8s-manifests/`:
-
-* `wireguard-app.yaml` $\rightarrow$ tracks `k8s-manifests/wireguard/`
-* `apod-app.yaml` $\rightarrow$ tracks `k8s-manifests/apod/`
-
-### Jenkins Sync Pipeline
-
-When changes are pushed to `main`, Jenkins invokes the ArgoCD REST API to force an immediate application refresh and sync.
+When code or manifests are pushed to `main`, GitHub triggers a Jenkins pipeline that dynamically discovers and synchronizes all ArgoCD applications across the cluster.
 
 [ Git Push to main ]
 │
 ▼
-[ Jenkins Pipeline ] ──── HTTP POST (Bearer Token) ────► [ ArgoCD REST API ]
+[ GitHub Webhook ] ────► [ Jenkins Pipeline ]
+│
+├─► 1. GET /api/v1/applications (Discovers all registered apps)
+│
+└─► 2. POST /api/v1/applications/{name}/sync (Triggers sync for each app)
 │
 ▼
-[ GKE Cluster Sync ]
-
-
-#### Pipeline Configuration Highlights
-
-* **Authentication**: Uses `argocd-jenkins-token` service account in Jenkins credentials manager.
-* **RBAC Policy**: Configured in `argocd-rbac-cm` ConfigMap:
-  ```yaml
-  p, role:jenkins-sync, applications, get, default/apod-api, allow
-  p, role:jenkins-sync, applications, sync, default/apod-api, allow
-  ```
+[ ArgoCD Engine ] ────► [ GKE Cluster Sync ]
 
 ---
+
+
+### Key Pipeline Capabilities
+
+* **Dynamic App Discovery**: Automatically detects new ArgoCD applications without needing updates to the `Jenkinsfile`.
+* **Multi-Revision Compatibility**: Omits hardcoded branch overrides, allowing Git repositories (`main`, `HEAD`) and Helm charts to sync cleanly according to their configured `targetRevision`.
+* **RBAC Scoped Access**: Authenticates via `argocd-jenkins-token` service account using permissions configured in `argocd-rbac-cm`.
+
+---
+
+## 🔒 Security & RBAC Configuration
+
+ArgoCD RBAC is configured via `argocd-rbac-cm` to allow the Jenkins service account full sync rights across all cluster applications:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-rbac-cm
+  namespace: argocd
+data:
+  policy.csv: |
+    p, role:jenkins-sync, applications, *, */*, allow
+    g, jenkins, role:jenkins-sync
+```
 
 ## 📁 Repository Structure
 
@@ -81,27 +81,29 @@ When changes are pushed to `main`, Jenkins invokes the ArgoCD REST API to force 
 │   │   └── wireguard.yaml
 │   ├── apod-app.yaml
 │   └── wireguard-app.yaml
-├── Jenkinsfile_for_nasa_app_sync_trigger_from_argocd
+├── Jenkinsfile_for_automatic_trigger_argocd
 └── README.md
+
 ```
 
 ---
 
 ## 🛠️ Operational Commands
 
-### Check Application Health
+### Check Application Health & Sync Status
 
 ```bash
-# Check ArgoCD Applications
+# Get status of all ArgoCD applications
 kubectl get applications -n argocd
 
-# Check Pod Status
+# Verify deployed pod resources in default namespace
 kubectl get pods -n default
 ```
 
-### Verify WireGuard Status Inside Container
+### Test Pipeline Trigger Manually
 
 ```bash
-POD_NAME=$(kubectl get pods -n default -l app=wireguard-ui -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n default $POD_NAME -c wireguard-server -- wg show
+# Push an empty commit to verify GitHub Webhook and Jenkins multi-app sync
+git commit --allow-empty -m "test: verify automated pipeline trigger"
+git push origin main
 ```
