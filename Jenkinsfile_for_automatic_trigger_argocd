@@ -22,8 +22,6 @@ pipeline {
             steps {
                 script {
                     sh """#!/bin/bash
-                        set -e
-
                         echo "Fetching list of all registered ArgoCD applications..."
                         
                         APP_LIST_FILE=\$(mktemp)
@@ -38,22 +36,8 @@ pipeline {
                             exit 1
                         fi
 
-                        # Clean JSON parsing using inline Python
-                        APP_NAMES=\$(python3 -c "
-import json, sys
-try:
-    data = json.load(open('\$APP_LIST_FILE'))
-    items = data.get('items', [])
-    names = [item['metadata']['name'] for item in items if 'metadata' in item and 'name' in item['metadata']]
-    print(' '.join(names))
-except Exception as e:
-    sys.exit(1)
-" 2>/dev/null)
-
-                        # Fallback if python3 is missing on executor: use sed/tr clean strip
-                        if [ -z "\$APP_NAMES" ]; then
-                            APP_NAMES=\$(cat "\$APP_LIST_FILE" | tr '{' '\n' | grep '"metadata"' | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | sort -u | tr '\n' ' ')
-                        fi
+                        # POSIX clean extraction of application metadata names
+                        APP_NAMES=\$(grep -o '"metadata":{[^}]*}' "\$APP_LIST_FILE" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | sort -u)
 
                         if [ -z "\$APP_NAMES" ]; then
                             echo "No applications found or failed to parse JSON."
