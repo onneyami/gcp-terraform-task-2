@@ -1,5 +1,18 @@
-.terraform/
-.terraform.lock.hcl
+# Terraform local state & overrides
 *.tfstate
 *.tfstate.*
-*.tfvars
+.terraform/
+.terraform.lock.hcl
+override.tf
+override.tf.json
+
+# Secrets & Local Tokens
+*.pem
+*.key
+argocd-token.txt
+kubeconfig
+
+# System & IDE clutter
+.DS_Store
+.idea/
+.vscode/
