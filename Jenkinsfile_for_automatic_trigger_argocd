@@ -54,11 +54,12 @@ pipeline {
                             
                             SYNC_RESPONSE_FILE=\$(mktemp)
                             
+                            # Omit 'revision' payload so ArgoCD syncs to each app's native targetRevision
                             SYNC_STATUS=\$(curl -s -o "\$SYNC_RESPONSE_FILE" -w "%{http_code}" -X POST \\
                               -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
                               -H "Content-Type: application/json" \\
                               "http://${env.ARGOCD_SERVER}/api/v1/applications/\$APP/sync" \\
-                              -d '{"revision": "main", "prune": true}')
+                              -d '{"prune": true}')
 
                             if [ "\$SYNC_STATUS" -eq 200 ]; then
                                 echo "    [OK] Successfully triggered sync for \$APP"
