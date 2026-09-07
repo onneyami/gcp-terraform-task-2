@@ -28,9 +28,9 @@ pipeline {
                         echo "Last commit message: ${commitMsg}"
 
                         if (commitMsg.contains('[skip ci]') || commitMsg.contains('Jenkins CI Bot')) {
-                            echo "Detected [skip ci] or Jenkins bot commit. Aborting pipeline safely."
-                            currentBuild.result = 'SUCCESS'
-                            error('Skipping build due to [skip ci]')
+                            echo "Detected [skip ci] or Jenkins bot commit. Stopping pipeline cleanly."
+                            currentBuild.result = 'ABORTED'
+                            return
                         }
                     }
                 }
