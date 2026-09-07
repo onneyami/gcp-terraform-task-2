@@ -1,98 +1,116 @@
-# GCP GKE Infrastructure & Automated GitOps CI/CD Pipeline
+# GCP Infrastructure & GitOps Pipeline (GKE + ArgoCD)
 
-An enterprise-grade, fully automated GitOps deployment pipeline on **Google Kubernetes Engine (GKE)**. The environment integrates **Terraform (IaC)**, **Workload Identity (Passwordless GCP Security)**, **Jenkins (Dynamic CI Agents)**, **GCP Artifact Registry & Cloud Build (Container Lifecycle)**, and **ArgoCD (GitOps Synchronization)**.
+This repository contains the end-to-end Infrastructure-as-Code (Terraform) and GitOps application delivery setup (ArgoCD, External Secrets Operator, cert-manager) running on Google Kubernetes Engine (GKE).
 
 ---
 
-## 🏗️ End-to-End Architecture Flow
+## 🏗 Infrastructure & Repository Structure
+
+The repository uses the **App-of-Apps pattern** in ArgoCD to manage multi-workload deployments from a single root manifest (`root-app.yaml`).
 
 ```text
-[ Developer Git Push ] ──► [ GitHub Webhook ] ──► [ Dynamic Jenkins Agent (Workload Identity) ]
-                                                                │
-                                                                ├─► 1. gcloud builds submit (GCP Cloud Build)
-                                                                │        │
-                                                                │        ▼
-                                                                │   [ Artifact Registry: europe-north1 ]
-                                                                │
-                                                                ├─► 2. Manifest Update & Git Write-Back
-                                                                │        (git commit [skip ci] -> main)
-                                                                │
-                                                                └─► 3. ArgoCD REST API Sync
-                                                                         │
-                                                                         ▼
-[ Public Ingress / Users ] ◄── [ GKE Private Cluster ] ◄── [ ArgoCD App-of-Apps Controller ]
-```
-
----
-
-## 🔑 Security Architecture: Workload Identity & GCP Integration
-
-To eliminate hardcoded GCP credentials (`service-account-key.json`), the cluster implements **GCP Workload Identity**:
-
-* **GCP Service Account**: `jenkins-gsa@andrei-innowise-tests-120826.iam.gserviceaccount.com`
-* **Kubernetes Service Account**: `jenkins-sa` (Namespace: `jenkins`)
-* **Binding**: The K8s service account is mapped via `roles/iam.workloadIdentityUser` to the GCP service account.
-* **Service Access**: Dynamic Jenkins agent pods run under `jenkins-sa`, allowing native token exchange to authenticate with **Artifact Registry**, **Cloud Build**, and **Cloud Storage** without storing static credentials.
-
----
-
-## 📦 Deployed Applications
-
-| Application                     | Type / Framework      | Public Endpoint / Scope                | Namespace          | GitOps Source Path                          |
-| ------------------------------- | --------------------- | -------------------------------------- | ------------------ | ------------------------------------------- |
-| **Root Application**      | ArgoCD App-of-Apps    | Internal Cluster Controller            | `argocd`         | `k8s-manifests/apps/root-app.yaml`        |
-| **NASA APOD API**         | Node.js (Dockerized)  | `https://nasa.andrei-test.lendo.dev` | `default`        | `app/apod-api/` & `k8s-manifests/apod/` |
-| **WireGuard VPN**         | Network & Admin UI    | `https://vpn.andrei-test.lendo.dev`  | `default`        | `k8s-manifests/wireguard/`                |
-| **Guestbook**             | Sample Workload       | Internal                               | `guestbook-demo` | `argoproj/argocd-example-apps`            |
-| **Kube-Prometheus-Stack** | Monitoring & Alerting | Internal Cluster Scope                 | `monitoring`     | Helm Chart (`88.6.2`)                     |
-
----
-
-## 🚀 CI/CD Automated Workflow (Jenkins + Git Write-Back)
-
-When changes are pushed to `main`, a GitHub Webhook triggers the dynamic `Jenkinsfile` pipeline:
-
-1. **Source Checkout**: Dynamic pod (`google/cloud-sdk:slim`) provisions in `jenkins` namespace.
-2. **Container Build & Push**: Jenkins submits a build to **GCP Cloud Build**, generating an immutable image tag (`v1.0.${BUILD_NUMBER}-${GIT_COMMIT_SHORT}`) pushed directly to **GCP Artifact Registry** (`europe-north1`).
-3. **Automated Git Write-Back**: Jenkins updates the image tag inside `k8s-manifests/apod/apod-deployment.yaml` and commits the change back to `main` using `[skip ci]` (preventing recursive webhook loops).
-4. **ArgoCD Automated Sync**: Jenkins queries ArgoCD's REST API and triggers a sync across all managed applications, automatically pulling the newly tagged container image into GKE.
-
----
-
-## 📂 Repository Structure
-
-```text
-.
-├── app/
-│   └── apod-api/
-│       ├── Dockerfile              # Multi-arch container build definition
-│       └── server.js               # Standalone Node.js HTTP application
+gcp-terraform-task-2/
+├── terraform/                      # IaC: GKE Cluster, VPC, IAM, Service Accounts
 ├── k8s-manifests/
-│   ├── apps/
-│   │   └── root-app.yaml           # Master ArgoCD App-of-Apps parent manifest
-│   ├── apod/
-│   │   ├── apod-deployment.yaml    # References Artifact Registry container image
-│   │   ├── apod-ingress.yaml
-│   │   └── apod-service.yaml
-│   └── wireguard/
-│       └── wireguard.yaml
-├── Jenkinsfile                     # Multi-stage CI pipeline with Git Write-Back
-└── README.md
+│   ├── argocd-ingress.yaml         # Ingress with cert-manager TLS offloading
+│   ├── apps/                       # Root App destination (recurse: true)
+│   │   ├── root-app.yaml           # Parent ArgoCD Application
+│   │   ├── external-secrets-app.yaml # ESO Helm Chart (Sync-Wave: -1)
+│   │   ├── secrets-app.yaml        # SecretStore & ExternalSecrets (Sync-Wave: 1)
+│   │   ├── apod-api-app.yaml       # APOD Microservice
+│   │   ├── guestbook-app.yaml      # Sample Guestbook App
+│   │   ├── observability-app.yaml  # Monitoring Stack (Prometheus/Grafana)
+│   │   └── wireguard-app.yaml      # VPN Overlay Service
+│   ├── apod/                       # Manifests for APOD API
+│   └── secrets/                    # SecretStore & ExternalSecret custom resources
 ```
 
 ---
 
-## 🛠️ Verification & Diagnostic Commands
+## 🔄 GitOps Execution Order (Sync Waves)
 
-### Check Workload Identity & Pod Image Version
+To prevent race conditions during deployment (e.g., trying to create an `ExternalSecret` before the CRD exists), deployment order is controlled via ArgoCD **Sync Waves**:
+
+| Wave                      | Component            | Description                                                                                                      |
+| ------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| **Wave`-1**`            | `external-secrets` | Installs the External Secrets Operator & CRDs via Helm.                                                          |
+| **Wave`1**`             | `secrets-config`   | Deploys`ClusterSecretStore` and `ExternalSecret` custom resources.                                           |
+| **Default (`0`)** | Workloads            | Applications (`apod-api`, `guestbook`, `wireguard`, `observability`) fetch injected secrets and boot up. |
+
+---
+
+## 🔑 Secret Management Integration (ESO + GCP Secret Manager)
+
+Secrets are stored securely in **GCP Secret Manager** and automatically injected into GKE namespaces as standard Kubernetes `Secrets`.
+
+1. **Workload Identity**: ArgoCD and ESO use GCP Workload Identity to authenticate with GCP APIs without requiring static service account keys.
+2. **Dynamic Syncing**: `ExternalSecret` resources observe GCP Secret Manager for updates and keep cluster secrets synced in real time.
+
+---
+
+## 🌐 Ingress & Traffic Routing
+
+* **Ingress Controller**: `ingress-nginx`
+* **TLS Management**: `cert-manager` with Let's Encrypt production issuer (`letsencrypt-prod`).
+* **ArgoCD Server Architecture**:
+* Ingress offloads SSL at the edge (`argocd.andrei-test.lendo.dev`).
+* `argocd-server` runs with the `--insecure` flag, receiving HTTP traffic on port `80` (targetPort `8080`) internally to eliminate 502 Bad Gateway / SSL handshake mismatches.
+
+---
+
+## 🚀 Quickstart & Operations Guide
+
+### 1. Apply Infrastructure with Terraform
 
 ```bash
-# Verify deployed container image tag in GKE
-kubectl get deployment apod-api -n default -o jsonpath='{.spec.template.spec.containers[0].image}'
+cd terraform
+terraform init
+terraform apply
 
-# Inspect Artifact Registry stored tags
-gcloud artifacts docker tags list europe-north1-docker.pkg.dev/andrei-innowise-tests-120826/gke-repo/apod-api
-
-# Check ArgoCD cluster sync state
-kubectl get applications -n argocd
 ```
+
+### 2. Connect to GKE Cluster
+
+```bash
+gcloud container clusters get-credentials <gke-cluster-name> --region <gcp-region> --project <gcp-project-id>
+
+```
+
+### 3. Bootstrap ArgoCD Root Application
+
+To initialize the entire GitOps pipeline and launch all child applications:
+
+```bash
+kubectl apply -f k8s-manifests/apps/root-app.yaml
+
+```
+
+### 4. Verify Application & Sync Status
+
+```bash
+# Check all deployed ArgoCD Applications
+kubectl get applications -n argocd
+
+# Check live pod status
+kubectl get pods -A
+
+```
+
+---
+
+## 🛠 Branching & Automated CI Workflow
+
+* **`main`**: Production-ready branch. Holds the validated infrastructure and manifest baselines.
+* **`dev`**: Active deployment target for automated CI/CD write-backs (e.g., image tag updates triggered by build pipelines).
+
+When updating application manifests, always pull changes with standard merges to preserve automated write-backs from Jenkins/CI:
+
+```bash
+git checkout dev
+git pull origin dev --no-rebase
+git merge main
+git push origin dev
+
+```
+
+---
