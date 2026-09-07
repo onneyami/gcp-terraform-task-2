@@ -19,7 +19,7 @@ pipeline {
     }
 
     stages {
-        stage('Check Commit Message') {
+        stage('Evaluate Execution') {
             steps {
                 script {
                     container('build-tools') {
@@ -28,9 +28,10 @@ pipeline {
                         echo "Last commit message: ${commitMsg}"
 
                         if (commitMsg.contains('[skip ci]') || commitMsg.contains('Jenkins CI Bot')) {
-                            echo "Detected [skip ci] or Jenkins bot commit. Stopping pipeline cleanly."
-                            currentBuild.result = 'ABORTED'
-                            return
+                            env.SKIP_BUILD = 'true'
+                            echo "===> [skip ci] detected! Setting SKIP_BUILD=true"
+                        } else {
+                            env.SKIP_BUILD = 'false'
                         }
                     }
                 }
@@ -38,6 +39,9 @@ pipeline {
         }
 
         stage('Build & Push Docker Image') {
+            when {
+                environment name: 'SKIP_BUILD', value: 'false'
+            }
             steps {
                 container('build-tools') {
                     sh """#!/bin/bash
@@ -79,12 +83,20 @@ pipeline {
         }
 
         stage('Update GitOps Manifest & Write-Back') {
+            when {
+                environment name: 'SKIP_BUILD', value: 'false'
+            }
             steps {
                 container('build-tools') {
                     sh """#!/bin/bash
                         set -e
                         git config --global --add safe.directory '*'
                         
+                        if [ ! -f .image_tag ]; then
+                            echo "No image tag found. Skipping write-back."
+                            exit 0
+                        fi
+
                         FULL_IMAGE=\$(cat .image_tag)
 
                         echo "===> Updating deployment manifest: ${MANIFEST_PATH}"
@@ -104,6 +116,9 @@ pipeline {
         }
 
         stage('Trigger ArgoCD Sync') {
+            when {
+                environment name: 'SKIP_BUILD', value: 'false'
+            }
             steps {
                 script {
                     sh """#!/bin/bash
@@ -131,8 +146,8 @@ pipeline {
     }
 
     post {
-        success {
-            echo "✅ Pipeline completed successfully."
+        always {
+            echo "Pipeline evaluation complete."
         }
     }
 }
