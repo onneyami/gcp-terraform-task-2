@@ -21,29 +21,23 @@ pipeline {
     stages {
         stage('Check Commit Message') {
             steps {
-                container('build-tools') {
-                    sh """#!/bin/bash
-                        git config --global --add safe.directory '*'
-                        LAST_COMMIT_MSG=\$(git log -1 --pretty=%B)
-                        echo "Last commit message: \${LAST_COMMIT_MSG}"
+                script {
+                    container('build-tools') {
+                        sh "git config --global --add safe.directory '*'"
+                        def commitMsg = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
+                        echo "Last commit message: ${commitMsg}"
 
-                        if echo "\${LAST_COMMIT_MSG}" | grep -q "\[skip ci\]"; then
-                            echo "Detected [skip ci] in commit message. Aborting pipeline to prevent infinite loops."
-                            exit 0
-                        fi
-                    """
+                        if (commitMsg.contains('[skip ci]') || commitMsg.contains('Jenkins CI Bot')) {
+                            echo "Detected [skip ci] or Jenkins bot commit. Aborting pipeline safely."
+                            currentBuild.result = 'SUCCESS'
+                            error('Skipping build due to [skip ci]')
+                        }
+                    }
                 }
             }
         }
 
         stage('Build & Push Docker Image') {
-            when {
-                // Only build if the pipeline wasn't skipped in previous check
-                expression {
-                    def commitMsg = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
-                    return !commitMsg.contains("[skip ci]")
-                }
-            }
             steps {
                 container('build-tools') {
                     sh """#!/bin/bash
@@ -85,23 +79,12 @@ pipeline {
         }
 
         stage('Update GitOps Manifest & Write-Back') {
-            when {
-                expression {
-                    def commitMsg = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
-                    return !commitMsg.contains("[skip ci]")
-                }
-            }
             steps {
                 container('build-tools') {
                     sh """#!/bin/bash
                         set -e
                         git config --global --add safe.directory '*'
                         
-                        if [ ! -f .image_tag ]; then
-                            echo "No new image built. Skipping write-back."
-                            exit 0
-                        fi
-
                         FULL_IMAGE=\$(cat .image_tag)
 
                         echo "===> Updating deployment manifest: ${MANIFEST_PATH}"
@@ -121,12 +104,6 @@ pipeline {
         }
 
         stage('Trigger ArgoCD Sync') {
-            when {
-                expression {
-                    def commitMsg = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
-                    return !commitMsg.contains("[skip ci]")
-                }
-            }
             steps {
                 script {
                     sh """#!/bin/bash
@@ -155,7 +132,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ Pipeline execution finished."
+            echo "✅ Pipeline completed successfully."
         }
     }
 }
