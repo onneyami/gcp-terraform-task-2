@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: apod-api
-          image: europe-north1-docker.pkg.dev/andrei-innowise-tests-120826/gke-repo/apod-api:v1.0.38-1eed9bb
+          image: europe-north1-docker.pkg.dev/andrei-innowise-tests-120826/gke-repo/apod-api:v1.0.39-cf2f095
           ports:
             - containerPort: 8080
           readinessProbe:
