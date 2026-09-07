@@ -10,7 +10,7 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/onneyami/gcp-terraform-task-2.git'
-    targetRevision: main
+    targetRevision: dev
     path: k8s-manifests
     directory:
       recurse: false

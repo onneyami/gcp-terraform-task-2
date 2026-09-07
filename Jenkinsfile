@@ -12,6 +12,7 @@ pipeline {
         ARGOCD_SERVER  = 'argocd-server.argocd.svc.cluster.local:80'
         ARGOCD_TOKEN   = credentials('argocd-jenkins-token')
         GITHUB_CREDS   = credentials('github-jenkins-token')
+        TARGET_BRANCH  = 'dev'
     }
 
     triggers {
@@ -82,7 +83,7 @@ pipeline {
             }
         }
 
-        stage('Update GitOps Manifest & Write-Back') {
+        stage('Update GitOps Manifest & Write-Back to Dev Branch') {
             when {
                 environment name: 'SKIP_BUILD', value: 'false'
             }
@@ -99,6 +100,10 @@ pipeline {
 
                         FULL_IMAGE=\$(cat .image_tag)
 
+                        echo "===> Fetching latest ${env.TARGET_BRANCH} branch..."
+                        git fetch origin ${env.TARGET_BRANCH}
+                        git checkout ${env.TARGET_BRANCH}
+
                         echo "===> Updating deployment manifest: ${MANIFEST_PATH}"
                         sed -i "s|image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REGISTRY_NAME}/${IMAGE_NAME}:.*|image: \${FULL_IMAGE}|g" ${MANIFEST_PATH}
 
@@ -109,7 +114,8 @@ pipeline {
                         
                         git commit -m "chore(ci): auto-update apod-api image to \${FULL_IMAGE} [skip ci]" || echo "No changes to commit"
                         
-                        git push https://${GITHUB_CREDS_USR}:${GITHUB_CREDS_PSW}@github.com/onneyami/gcp-terraform-task-2.git HEAD:main
+                        echo "===> Pushing updated manifest to ${env.TARGET_BRANCH} branch..."
+                        git push https://${GITHUB_CREDS_USR}:${GITHUB_CREDS_PSW}@github.com/onneyami/gcp-terraform-task-2.git HEAD:${env.TARGET_BRANCH}
                     """
                 }
             }
