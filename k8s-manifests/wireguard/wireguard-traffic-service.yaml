@@ -1,0 +1,20 @@
+# LoadBalancer Service for UDP VPN Traffic
+apiVersion: v1
+kind: Service
+metadata:
+  name: wireguard-udp-service
+  namespace: default
+  labels:
+    app: wireguard-ui
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Cluster
+  loadBalancerSourceRanges:
+    - "0.0.0.0/0"
+  ports:
+    - port: 51820
+      targetPort: 51820
+      protocol: UDP
+      name: wireguard-udp
+  selector:
+    app: wireguard-ui
