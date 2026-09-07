@@ -1,4 +1,3 @@
-
 # GCP GKE Infrastructure & GitOps Pipeline
 
 A production-grade Kubernetes deployment pipeline on **Google Kubernetes Engine (GKE)** managed via **Terraform (IaC)**, **Jenkins (CI Automation)**, **GCP Artifact Registry (Container Registry)**, and **ArgoCD (GitOps Engine)**.
@@ -89,14 +88,12 @@ Push an empty commit to verify GitHub Webhook auto-triggering and ArgoCD synchro
 ```bash
 git commit --allow-empty -m "test: verify github webhook and multi-app sync pipeline"
 git push origin main
-
 ```
 
 ### Inspect Container Registry Image
 
 ```bash
 gcloud artifacts docker images list europe-north1-docker.pkg.dev/andrei-innowise-tests-120826/gke-repo/apod-api
-
 ```
 
 ### Verify Application Health in GKE
