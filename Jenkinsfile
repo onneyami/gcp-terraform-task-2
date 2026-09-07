@@ -19,19 +19,35 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Source Code') {
+        stage('Check Commit Message') {
             steps {
-                echo "Pulling latest code from Git..."
-                checkout scm
+                container('build-tools') {
+                    sh """#!/bin/bash
+                        git config --global --add safe.directory '*'
+                        LAST_COMMIT_MSG=\$(git log -1 --pretty=%B)
+                        echo "Last commit message: \${LAST_COMMIT_MSG}"
+
+                        if echo "\${LAST_COMMIT_MSG}" | grep -q "\[skip ci\]"; then
+                            echo "Detected [skip ci] in commit message. Aborting pipeline to prevent infinite loops."
+                            exit 0
+                        fi
+                    """
+                }
             }
         }
 
         stage('Build & Push Docker Image') {
+            when {
+                // Only build if the pipeline wasn't skipped in previous check
+                expression {
+                    def commitMsg = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
+                    return !commitMsg.contains("[skip ci]")
+                }
+            }
             steps {
                 container('build-tools') {
                     sh """#!/bin/bash
                         set -e
-                        
                         git config --global --add safe.directory '*'
 
                         GIT_COMMIT_SHORT=\$(git rev-parse --short HEAD)
@@ -40,7 +56,6 @@ pipeline {
 
                         echo "===> Submitting asynchronous container build to Cloud Build: \${FULL_IMAGE}"
                         
-                        # Submit build asynchronously to avoid log-streaming permission checks
                         BUILD_ID=\$(gcloud builds submit app/apod-api/ \
                           --tag="\${FULL_IMAGE}" \
                           --project="${PROJECT_ID}" \
@@ -49,7 +64,6 @@ pipeline {
 
                         echo "===> Build submitted with ID: \${BUILD_ID}. Waiting for completion..."
 
-                        # Poll build status until SUCCESS or FAILURE
                         while true; do
                             STATUS=\$(gcloud builds describe \${BUILD_ID} --project="${PROJECT_ID}" --format="value(status)")
                             echo "Current build status: \${STATUS}"
@@ -61,11 +75,9 @@ pipeline {
                                 echo "❌ Build failed with status: \${STATUS}"
                                 exit 1
                             fi
-                            
                             sleep 10
                         done
 
-                        # Save generated tag for write-back stage
                         echo "\${FULL_IMAGE}" > .image_tag
                     """
                 }
@@ -73,31 +85,33 @@ pipeline {
         }
 
         stage('Update GitOps Manifest & Write-Back') {
+            when {
+                expression {
+                    def commitMsg = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
+                    return !commitMsg.contains("[skip ci]")
+                }
+            }
             steps {
                 container('build-tools') {
                     sh """#!/bin/bash
                         set -e
-                        
                         git config --global --add safe.directory '*'
+                        
+                        if [ ! -f .image_tag ]; then
+                            echo "No new image built. Skipping write-back."
+                            exit 0
+                        fi
+
                         FULL_IMAGE=\$(cat .image_tag)
 
                         echo "===> Updating deployment manifest: ${MANIFEST_PATH}"
-                        
-                        # Replace image reference in deployment manifest
                         sed -i "s|image: ${REGION}-docker.pkg.dev/${PROJECT_ID}/${REGISTRY_NAME}/${IMAGE_NAME}:.*|image: \${FULL_IMAGE}|g" ${MANIFEST_PATH}
 
-                        echo "===> Checking Git diff..."
-                        git diff ${MANIFEST_PATH}
-
-                        # Configure Git identity for Jenkins
                         git config user.email "jenkins-ci@innowise.com"
                         git config user.name "Jenkins CI Bot"
 
-                        # Authenticate and push change back to GitHub
-                        echo "===> Committing updated image tag back to Git..."
                         git add ${MANIFEST_PATH}
                         
-                        # [skip ci] prevents GitHub Webhook from re-triggering this pipeline recursively
                         git commit -m "chore(ci): auto-update apod-api image to \${FULL_IMAGE} [skip ci]" || echo "No changes to commit"
                         
                         git push https://${GITHUB_CREDS_USR}:${GITHUB_CREDS_PSW}@github.com/onneyami/gcp-terraform-task-2.git HEAD:main
@@ -107,6 +121,12 @@ pipeline {
         }
 
         stage('Trigger ArgoCD Sync') {
+            when {
+                expression {
+                    def commitMsg = sh(script: "git log -1 --pretty=%B", returnStdout: true).trim()
+                    return !commitMsg.contains("[skip ci]")
+                }
+            }
             steps {
                 script {
                     sh """#!/bin/bash
@@ -135,10 +155,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ Build, push, Git write-back, and ArgoCD sync completed successfully!"
-        }
-        failure {
-            echo "❌ Pipeline failed during build or sync phase."
+            echo "✅ Pipeline execution finished."
         }
     }
 }
