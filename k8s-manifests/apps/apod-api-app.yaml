@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: apod-api
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"   # Syncs AFTER secrets-config (wave 1)
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/onneyami/gcp-terraform-task-2.git'
+    targetRevision: dev
+    path: k8s-manifests/apod
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - SkipDryRunOnMissingResource=true
