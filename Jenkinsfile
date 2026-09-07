@@ -32,19 +32,18 @@ pipeline {
                     sh """#!/bin/bash
                         set -e
                         
+                        # Fix Git safe directory ownership issue
+                        git config --global --add safe.directory '*'
+
                         # Generate unique image tag using build number and short git hash
                         GIT_COMMIT_SHORT=\$(git rev-parse --short HEAD)
                         IMAGE_TAG="v1.0.\${BUILD_NUMBER}-\${GIT_COMMIT_SHORT}"
                         FULL_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REGISTRY_NAME}/${IMAGE_NAME}:\${IMAGE_TAG}"
 
-                        echo "===> Configuring GCP Artifact Registry Docker Auth..."
-                        gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
-
-                        echo "===> Building Docker image: \${FULL_IMAGE}"
-                        docker build -t \${FULL_IMAGE} app/apod-api/
-
-                        echo "===> Pushing Docker image to GCP Artifact Registry..."
-                        docker push \${FULL_IMAGE}
+                        echo "===> Submitting container build to Cloud Build / Artifact Registry..."
+                        gcloud builds submit app/apod-api/ \
+                          --tag="\${FULL_IMAGE}" \
+                          --project="${PROJECT_ID}" --quiet
 
                         # Save tag for next stage
                         echo "\${FULL_IMAGE}" > .image_tag
@@ -58,6 +57,8 @@ pipeline {
                 container('build-tools') {
                     sh """#!/bin/bash
                         set -e
+                        
+                        git config --global --add safe.directory '*'
                         FULL_IMAGE=\$(cat .image_tag)
 
                         echo "===> Updating deployment manifest: ${MANIFEST_PATH}"
