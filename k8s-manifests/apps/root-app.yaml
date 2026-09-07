@@ -10,9 +10,9 @@ spec:
   source:
     repoURL: 'https://github.com/onneyami/gcp-terraform-task-2.git'
     targetRevision: dev
-    path: k8s-manifests/apps    # <--- Point directly to the apps folder
+    path: k8s-manifests/apps
     directory:
-      recurse: true             # <--- Enable recursion
+      recurse: true
   destination:
     server: 'https://kubernetes.default.svc'
     namespace: argocd
