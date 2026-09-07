@@ -32,20 +32,38 @@ pipeline {
                     sh """#!/bin/bash
                         set -e
                         
-                        # Fix Git safe directory ownership issue inside container
                         git config --global --add safe.directory '*'
 
-                        # Generate unique image tag using build number and short git hash
                         GIT_COMMIT_SHORT=\$(git rev-parse --short HEAD)
                         IMAGE_TAG="v1.0.\${BUILD_NUMBER}-\${GIT_COMMIT_SHORT}"
                         FULL_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${REGISTRY_NAME}/${IMAGE_NAME}:\${IMAGE_TAG}"
 
-                        echo "===> Submitting container build to Cloud Build: \${FULL_IMAGE}"
-                        gcloud builds submit app/apod-api/ \
+                        echo "===> Submitting asynchronous container build to Cloud Build: \${FULL_IMAGE}"
+                        
+                        # Submit build asynchronously to avoid log-streaming permission checks
+                        BUILD_ID=\$(gcloud builds submit app/apod-api/ \
                           --tag="\${FULL_IMAGE}" \
                           --project="${PROJECT_ID}" \
-                          --suppress-logs \
-                          --quiet
+                          --async \
+                          --format="value(id)")
+
+                        echo "===> Build submitted with ID: \${BUILD_ID}. Waiting for completion..."
+
+                        # Poll build status until SUCCESS or FAILURE
+                        while true; do
+                            STATUS=\$(gcloud builds describe \${BUILD_ID} --project="${PROJECT_ID}" --format="value(status)")
+                            echo "Current build status: \${STATUS}"
+                            
+                            if [ "\${STATUS}" = "SUCCESS" ]; then
+                                echo "✅ Build completed successfully!"
+                                break
+                            elif [ "\${STATUS}" = "FAILURE" ] || [ "\${STATUS}" = "INTERNAL_ERROR" ] || [ "\${STATUS}" = "TIMEOUT" ]; then
+                                echo "❌ Build failed with status: \${STATUS}"
+                                exit 1
+                            fi
+                            
+                            sleep 10
+                        done
 
                         # Save generated tag for write-back stage
                         echo "\${FULL_IMAGE}" > .image_tag
