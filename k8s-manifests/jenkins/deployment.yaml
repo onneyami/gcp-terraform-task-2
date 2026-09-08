@@ -18,7 +18,6 @@ spec:
         fsGroup: 1000
         runAsUser: 1000
       initContainers:
-        # Pre-install plugins automatically on pod startup
         - name: install-plugins
           image: jenkins/jenkins:lts-jdk21
           command:
@@ -38,6 +37,8 @@ spec:
         - name: jenkins
           image: jenkins/jenkins:lts-jdk21
           env:
+            - name: JAVA_OPTS
+              value: "-Djenkins.install.runSetupWizard=false" # Bypasses the initial setup wizard
             - name: CASC_JENKINS_CONFIG
               value: /var/jenkins_home/casc_configs/jenkins.yaml
           ports:
