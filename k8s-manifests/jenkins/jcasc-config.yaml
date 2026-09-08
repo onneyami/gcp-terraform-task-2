@@ -20,7 +20,7 @@ data:
         - kubernetes:
             name: "kubernetes"
             serverUrl: "https://kubernetes.default.svc"
-            jenkinsUrl: "http://jenkins.jenkins.svc.cluster.local:8080"
+            jenkinsUrl: "http://jenkins-service.jenkins.svc.cluster.local:8080"
             templates:
               - name: "gcp-agent"
                 label: "gcp-agent"
