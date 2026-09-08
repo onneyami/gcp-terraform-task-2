@@ -24,7 +24,7 @@ spec:
             - sh
             - -c
             - |
-              jenkins-plugin-cli --plugins \
+              jenkins-plugin-cli -d /var/jenkins_home/plugins --plugins \
                 git:latest \
                 workflow-aggregator:latest \
                 configuration-as-code:latest \
@@ -38,7 +38,7 @@ spec:
           image: jenkins/jenkins:lts-jdk21
           env:
             - name: JAVA_OPTS
-              value: "-Djenkins.install.runSetupWizard=false" # Bypasses the initial setup wizard
+              value: "-Djenkins.install.runSetupWizard=false"
             - name: CASC_JENKINS_CONFIG
               value: /var/jenkins_home/casc_configs/jenkins.yaml
           ports:
