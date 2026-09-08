@@ -14,7 +14,7 @@ data:
               password: "AdminPassword123!"
       authorizationStrategy:
         loggedInUsersCanDoAnything:
-          authenticatedUserReadPermission: true
+          allowsAnonymousRead: false
     unclassified:
       location:
         url: "https://jenkins.andrei-test.lendo.dev/"
