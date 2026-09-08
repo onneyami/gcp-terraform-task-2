@@ -14,41 +14,46 @@ spec:
         app: jenkins
     spec:
       serviceAccountName: jenkins-sa
-      # Prevents "Permission denied" errors on the mounted volume
       securityContext:
         fsGroup: 1000
         runAsUser: 1000
+      initContainers:
+        # Pre-install plugins automatically on pod startup
+        - name: install-plugins
+          image: jenkins/jenkins:lts-jdk21
+          command:
+            - sh
+            - -c
+            - |
+              jenkins-plugin-cli --plugins \
+                git:latest \
+                workflow-aggregator:latest \
+                configuration-as-code:latest \
+                google-kubernetes-engine:latest \
+                kubernetes:latest
+          volumeMounts:
+            - name: jenkins-home-volume
+              mountPath: /var/jenkins_home
       containers:
         - name: jenkins
           image: jenkins/jenkins:lts-jdk21
+          env:
+            - name: CASC_JENKINS_CONFIG
+              value: /var/jenkins_home/casc_configs/jenkins.yaml
           ports:
             - containerPort: 8080
               name: web
             - containerPort: 50000
               name: agent
-          startupProbe:
-            httpGet:
-              path: /login
-              port: 8080
-            failureThreshold: 30
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /login
-              port: 8080
-            periodSeconds: 10
-            timeoutSeconds: 5
-          readinessProbe:
-            httpGet:
-              path: /login
-              port: 8080
-            periodSeconds: 10
-            timeoutSeconds: 5
           volumeMounts:
-            # Mounts the 100 GB PVC to the Jenkins data directory
             - name: jenkins-home-volume
               mountPath: /var/jenkins_home
+            - name: casc-config
+              mountPath: /var/jenkins_home/casc_configs
       volumes:
         - name: jenkins-home-volume
           persistentVolumeClaim:
             claimName: jenkins-home-pvc
+        - name: casc-config
+          configMap:
+            name: jenkins-casc-config
