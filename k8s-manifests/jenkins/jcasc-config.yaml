@@ -18,3 +18,20 @@ data:
     unclassified:
       location:
         url: "https://jenkins.andrei-test.lendo.dev/"
+    jobs:
+      - script: |
+          pipelineJob('gcp-app-ci-cd') {
+            definition {
+              cpsScm {
+                scm {
+                  git {
+                    remote {
+                      url('https://github.com/onneyami/gcp-terraform-task-2.git')
+                    }
+                    branches('*/main')
+                  }
+                }
+                scriptPath('Jenkinsfile')
+              }
+            }
+          }

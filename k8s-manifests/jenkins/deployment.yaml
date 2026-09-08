@@ -29,7 +29,8 @@ spec:
                 workflow-aggregator:latest \
                 configuration-as-code:latest \
                 google-kubernetes-engine:latest \
-                kubernetes:latest
+                kubernetes:latest \
+                job-dsl:latest
           volumeMounts:
             - name: jenkins-home-volume
               mountPath: /var/jenkins_home
