@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jenkins
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/onneyami/gcp-terraform-task-2.git'
+    targetRevision: main  # Ensure this matches your active working branch
+    path: k8s-manifests/jenkins
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: jenkins
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
