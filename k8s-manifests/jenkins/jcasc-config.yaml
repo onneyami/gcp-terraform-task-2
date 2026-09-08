@@ -24,6 +24,7 @@ data:
             templates:
               - name: "gcp-agent"
                 label: "gcp-agent"
+                serviceAccount: "jenkins-sa"
                 containers:
                   - name: "jnlp"
                     image: "jenkins/inbound-agent:latest"
