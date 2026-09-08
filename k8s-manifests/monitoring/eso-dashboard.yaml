@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-eso
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  eso-metrics.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "title": "ESO Metrics Overview",
+      "panels": []
+    }

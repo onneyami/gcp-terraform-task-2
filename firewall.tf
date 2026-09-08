@@ -1,6 +1,6 @@
 resource "google_compute_firewall" "allow_wireguard_udp" {
   name        = "allow-wireguard-udp"
-  network     = "gke-vpc"
+  network     = google_compute_network.vpc.name
   description = "Allow WireGuard UDP traffic"
   direction   = "INGRESS"
   priority    = 1000
