@@ -8,8 +8,8 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/YOUR_USER/YOUR_REPO.git' # Replace with your repo URL
-    targetRevision: HEAD
+    repoURL: 'https://github.com/onneyami/gcp-terraform-task-2.git'
+    targetRevision: main
     path: k8s-manifests/monitoring
   destination:
     server: 'https://kubernetes.default.svc'
