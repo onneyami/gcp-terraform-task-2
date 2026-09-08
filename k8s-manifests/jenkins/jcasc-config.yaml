@@ -42,11 +42,12 @@ data:
                   id: "argocd-jenkins-token"
                   secret: "YOUR_ARGOCD_TOKEN_HERE"
                   description: "ArgoCD API Token for Jenkins Pipeline"
-              - string:
+              - usernamePassword:
                   scope: GLOBAL
                   id: "github-jenkins-token"
-                  secret: "YOUR_GITHUB_TOKEN_HERE"
-                  description: "GitHub Token for Status Checks or API Calls"
+                  username: "onneyami"
+                  password: "YOUR_GITHUB_TOKEN_HERE"
+                  description: "GitHub Personal Access Token"
     unclassified:
       location:
         url: "https://jenkins.andrei-test.lendo.dev/"
