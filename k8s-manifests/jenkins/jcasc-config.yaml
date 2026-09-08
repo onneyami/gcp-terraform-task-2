@@ -11,13 +11,10 @@ data:
           allowsSignup: false
           users:
             - id: "admin"
-              password: "AdminPassword123!" # Replace with desired admin password or load from K8s Secret
+              password: "AdminPassword123!"
       authorizationStrategy:
         loggedInUsersCanDoAnything:
           authenticatedUserReadPermission: true
-      mode: NORMAL
-      numExecutors: 2
-      scmCheckoutRetryCount: 2
     unclassified:
       location:
         url: "https://jenkins.andrei-test.lendo.dev/"
