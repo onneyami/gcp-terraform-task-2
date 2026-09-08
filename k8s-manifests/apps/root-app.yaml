@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/onneyami/gcp-terraform-task-2.git'
-    targetRevision: dev
+    targetRevision: main
     path: k8s-manifests/apps    # <--- Point directly to the apps folder
     directory:
       recurse: true             # <--- Enable recursion

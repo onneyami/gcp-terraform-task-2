@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: 'https://github.com/onneyami/gcp-terraform-task-2.git'
-    targetRevision: dev
+    targetRevision: main
     path: k8s-manifests/apod
   destination:
     server: 'https://kubernetes.default.svc'
