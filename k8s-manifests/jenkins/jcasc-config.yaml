@@ -28,6 +28,10 @@ data:
                   - name: "jnlp"
                     image: "jenkins/inbound-agent:latest"
                     workingDir: "/home/jenkins/agent"
+                  - name: "build-tools"
+                    image: "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"
+                    command: "cat"
+                    ttyEnabled: true
     credentials:
       system:
         domainCredentials:
