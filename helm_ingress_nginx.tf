@@ -26,4 +26,9 @@ resource "helm_release" "ingress_nginx" {
       value = "true"
     }
   ]
+
+  # CRITICAL: Ensures Helm uninstalls LoadBalancer service BEFORE GKE nodes are destroyed
+  depends_on = [
+    module.gke
+  ]
 }

@@ -1,4 +1,4 @@
-# 1. Deploy ArgoCD via Helm with --insecure enabled natively
+# 1. Deploy ArgoCD via Helm
 resource "helm_release" "argocd" {
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
@@ -7,11 +7,15 @@ resource "helm_release" "argocd" {
   create_namespace = true
   version          = "10.8.2"
 
-  set =[
+  set = [
     {
-    name  = "server.extraArgs"
-    value = "{--insecure}"
+      name  = "server.extraArgs"
+      value = "{--insecure}"
     }
+  ]
+
+  depends_on = [
+    module.gke
   ]
 }
 
@@ -55,6 +59,7 @@ resource "helm_release" "argocd_root_app" {
             syncOptions:
               - CreateNamespace=true
               - SkipDryRunOnMissingResource=true
+              - ServerSideApply=true
     EOF
   ]
 
