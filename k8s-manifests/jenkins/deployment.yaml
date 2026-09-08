@@ -26,6 +26,7 @@ spec:
             - |
               jenkins-plugin-cli -d /var/jenkins_home/plugins --plugins \
                 git:latest \
+                github:latest \
                 workflow-aggregator:latest \
                 configuration-as-code:latest \
                 google-kubernetes-engine:latest \
