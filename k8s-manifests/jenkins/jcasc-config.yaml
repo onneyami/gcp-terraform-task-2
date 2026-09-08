@@ -28,6 +28,15 @@ data:
                   - name: "jnlp"
                     image: "jenkins/inbound-agent:latest"
                     workingDir: "/home/jenkins/agent"
+    credentials:
+      system:
+        domainCredentials:
+          - credentials:
+              - string:
+                  scope: GLOBAL
+                  id: "argocd-jenkins-token"
+                  secret: "YOUR_ARGOCD_TOKEN_HERE"
+                  description: "ArgoCD API Token for Jenkins Pipeline"
     unclassified:
       location:
         url: "https://jenkins.andrei-test.lendo.dev/"

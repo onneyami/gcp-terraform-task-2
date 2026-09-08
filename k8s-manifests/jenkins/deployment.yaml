@@ -32,6 +32,8 @@ spec:
                 google-kubernetes-engine:latest \
                 kubernetes:latest \
                 job-dsl:latest
+                credentials:latest \
+                plain-credentials:latest
           volumeMounts:
             - name: jenkins-home-volume
               mountPath: /var/jenkins_home
