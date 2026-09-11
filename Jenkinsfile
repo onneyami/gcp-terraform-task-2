@@ -130,30 +130,48 @@ pipeline {
                 environment name: 'SKIP_BUILD', value: 'false'
             }
             steps {
-                script {
+                container('build-tools') {
                     sh """#!/bin/bash
-                        echo "===> Triggering ArgoCD sync cycle for all applications..."
+                        set -e
+                        echo "===> Querying all ArgoCD applications..."
                         
-                        APP_LIST_FILE=\$(mktemp)
-                        HTTP_STATUS=\$(curl -s -o "\$APP_LIST_FILE" -w "%{http_code}" -X GET \\
+                        RESPONSE_FILE=\$(mktemp)
+                        HTTP_STATUS=\$(curl -s -o "\$RESPONSE_FILE" -w "%{http_code}" \\
                           -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
                           "http://${env.ARGOCD_SERVER}/api/v1/applications")
 
-                        APP_NAMES=\$(grep -o '"metadata":{[^}]*}' "\$APP_LIST_FILE" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | sort -u)
+                        if [ "\${HTTP_STATUS}" -ne 200 ]; then
+                            echo "❌ Failed to query ArgoCD API (HTTP \${HTTP_STATUS}):"
+                            cat "\$RESPONSE_FILE"
+                            exit 1
+                        fi
+
+                        APP_NAMES=\$(jq -r '.items[].metadata.name // empty' "\$RESPONSE_FILE")
+
+                        if [ -z "\$APP_NAMES" ]; then
+                            echo "⚠️ No applications found in ArgoCD response."
+                            exit 0
+                        fi
+
+                        echo "Found applications:"
+                        echo "\$APP_NAMES"
+                        echo "----------------------------------------"
 
                         for APP in \$APP_NAMES; do
                             echo "--> Triggering sync for application: \$APP"
-                            curl -s -X POST \\
+                            SYNC_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" -X POST \\
                               -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
                               -H "Content-Type: application/json" \\
                               "http://${env.ARGOCD_SERVER}/api/v1/applications/\$APP/sync" \\
-                              -d '{"prune": true}' > /dev/null
+                              -d '{"prune": true}')
+                            echo "    Sync triggered for \$APP (HTTP \${SYNC_STATUS})"
                         done
+
+                        echo "✅ Successfully triggered sync across all ArgoCD applications!"
                     """
                 }
             }
         }
-    }
 
     post {
         always {
