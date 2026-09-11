@@ -10,7 +10,6 @@ pipeline {
         IMAGE_NAME     = 'apod-api'
         MANIFEST_PATH  = 'k8s-manifests/apod/apod-deployment.yaml'
         ARGOCD_SERVER  = 'argocd-server.argocd.svc.cluster.local:80'
-        ARGOCD_TOKEN   = credentials('argocd-jenkins-token')
         GITHUB_CREDS   = credentials('github-jenkins-token')
         TARGET_BRANCH  = 'dev'
     }
@@ -55,10 +54,10 @@ pipeline {
 
                         echo "===> Submitting asynchronous container build to Cloud Build: \${FULL_IMAGE}"
                         
-                        BUILD_ID=\$(gcloud builds submit app/apod-api/ \
-                          --tag="\${FULL_IMAGE}" \
-                          --project="${PROJECT_ID}" \
-                          --async \
+                        BUILD_ID=\$(gcloud builds submit app/apod-api/ \\
+                          --tag="\${FULL_IMAGE}" \\
+                          --project="${PROJECT_ID}" \\
+                          --async \\
                           --format="value(id)")
 
                         echo "===> Build submitted with ID: \${BUILD_ID}. Waiting for completion..."
@@ -116,7 +115,6 @@ pipeline {
                         
                         echo "===> Pushing updated manifest to ${env.TARGET_BRANCH} branch..."
                         
-                        # --- SANITIZE TOKEN (TRIM NEWLINES/WHITESPACE) ---
                         CLEAN_GITHUB_TOKEN=\$(echo -n "\$GITHUB_CREDS_PSW" | tr -d '\\r\\n ')
                         
                         git push https://x-access-token:\${CLEAN_GITHUB_TOKEN}@github.com/onneyami/gcp-terraform-task-2.git HEAD:${env.TARGET_BRANCH}
@@ -133,10 +131,14 @@ pipeline {
                 container('build-tools') {
                     sh """#!/bin/bash
                         set -e
-                        echo "===> Retrieving fresh ArgoCD token from Kubernetes Secret..."
+                        echo "===> Retrieving fresh ArgoCD token directly from Kubernetes Secret..."
                         
-                        # Fetch token directly from ESO secret; fallback to credentials variable if kubectl fails
-                        LIVE_TOKEN=\$(kubectl get secret jenkins-pipeline-secrets -n jenkins -o jsonpath='{.data.ARGOCD_TOKEN}' 2>/dev/null | base64 -d || echo -n "\${ARGOCD_TOKEN}")
+                        LIVE_TOKEN=\$(kubectl get secret jenkins-pipeline-secrets -n jenkins -o jsonpath='{.data.ARGOCD_TOKEN}' 2>/dev/null | base64 -d)
+
+                        if [ -z "\$LIVE_TOKEN" ]; then
+                            echo "❌ Failed to fetch ARGOCD_TOKEN from secret jenkins-pipeline-secrets in jenkins namespace."
+                            exit 1
+                        fi
 
                         echo "===> Querying all ArgoCD applications..."
                         RESPONSE_FILE=\$(mktemp)
@@ -176,6 +178,7 @@ pipeline {
                 }
             }
         }
+    }
 
     post {
         always {
