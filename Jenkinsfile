@@ -124,58 +124,62 @@ pipeline {
         }
 
         stage('Trigger ArgoCD Sync') {
-            when {
-                environment name: 'SKIP_BUILD', value: 'false'
-            }
-            steps {
-                container('build-tools') {
-                    sh """#!/bin/bash
-                        set -e
-                        echo "===> Retrieving fresh ArgoCD token directly from Kubernetes Secret..."
-                        
-                        LIVE_TOKEN=\$(kubectl get secret jenkins-pipeline-secrets -n jenkins -o jsonpath='{.data.ARGOCD_TOKEN}' 2>/dev/null | base64 -d)
+        when {
+            environment name: 'SKIP_BUILD', value: 'false'
+        }
+        steps {
+            container('build-tools') {
+                sh """#!/bin/bash
+                    set -e
+                    echo "===> Retrieving fresh ArgoCD token from Kubernetes REST API..."
+                    
+                    K8S_TOKEN=\$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+                    
+                    LIVE_TOKEN=\$(curl -s --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \\
+                      -H "Authorization: Bearer \${K8S_TOKEN}" \\
+                      "https://kubernetes.default.svc/api/v1/namespaces/jenkins/secrets/jenkins-pipeline-secrets" | \\
+                      jq -r '.data.ARGOCD_TOKEN // empty' | base64 -d 2>/dev/null || true)
 
-                        if [ -z "\$LIVE_TOKEN" ]; then
-                            echo "❌ Failed to fetch ARGOCD_TOKEN from secret jenkins-pipeline-secrets in jenkins namespace."
-                            exit 1
-                        fi
+                    if [ -z "\$LIVE_TOKEN" ]; then
+                        echo "❌ Failed to fetch ARGOCD_TOKEN from K8s API secret jenkins-pipeline-secrets."
+                        exit 1
+                    fi
 
-                        echo "===> Querying all ArgoCD applications..."
-                        RESPONSE_FILE=\$(mktemp)
-                        HTTP_STATUS=\$(curl -s -o "\$RESPONSE_FILE" -w "%{http_code}" \\
+                    echo "===> Querying all ArgoCD applications..."
+                    RESPONSE_FILE=\$(mktemp)
+                    HTTP_STATUS=\$(curl -s -o "\$RESPONSE_FILE" -w "%{http_code}" \\
+                      -H "Authorization: Bearer \${LIVE_TOKEN}" \\
+                      "http://${env.ARGOCD_SERVER}/api/v1/applications")
+
+                    if [ "\${HTTP_STATUS}" -ne 200 ]; then
+                        echo "❌ Failed to query ArgoCD API (HTTP \${HTTP_STATUS}):"
+                        cat "\$RESPONSE_FILE"
+                        exit 1
+                    fi
+
+                    APP_NAMES=\$(jq -r '.items[].metadata.name // empty' "\$RESPONSE_FILE")
+
+                    if [ -z "\$APP_NAMES" ]; then
+                        echo "⚠️ No applications found in ArgoCD response."
+                        exit 0
+                    fi
+
+                    echo "Found applications:"
+                    echo "\$APP_NAMES"
+                    echo "----------------------------------------"
+
+                    for APP in \$APP_NAMES; do
+                        echo "--> Triggering sync for application: \$APP"
+                        SYNC_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" -X POST \\
                           -H "Authorization: Bearer \${LIVE_TOKEN}" \\
-                          "http://${env.ARGOCD_SERVER}/api/v1/applications")
+                          -H "Content-Type: application/json" \\
+                          "http://${env.ARGOCD_SERVER}/api/v1/applications/\$APP/sync" \\
+                          -d '{"prune": true}')
+                        echo "    Sync triggered for \$APP (HTTP \${SYNC_STATUS})"
+                    done
 
-                        if [ "\${HTTP_STATUS}" -ne 200 ]; then
-                            echo "❌ Failed to query ArgoCD API (HTTP \${HTTP_STATUS}):"
-                            cat "\$RESPONSE_FILE"
-                            exit 1
-                        fi
-
-                        APP_NAMES=\$(jq -r '.items[].metadata.name // empty' "\$RESPONSE_FILE")
-
-                        if [ -z "\$APP_NAMES" ]; then
-                            echo "⚠️ No applications found in ArgoCD response."
-                            exit 0
-                        fi
-
-                        echo "Found applications:"
-                        echo "\$APP_NAMES"
-                        echo "----------------------------------------"
-
-                        for APP in \$APP_NAMES; do
-                            echo "--> Triggering sync for application: \$APP"
-                            SYNC_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" -X POST \\
-                              -H "Authorization: Bearer \${LIVE_TOKEN}" \\
-                              -H "Content-Type: application/json" \\
-                              "http://${env.ARGOCD_SERVER}/api/v1/applications/\$APP/sync" \\
-                              -d '{"prune": true}')
-                            echo "    Sync triggered for \$APP (HTTP \${SYNC_STATUS})"
-                        done
-
-                        echo "✅ Successfully triggered sync across all ArgoCD applications!"
-                    """
-                }
+                    echo "✅ Successfully triggered sync across all ArgoCD applications!"
+                """
             }
         }
     }
