@@ -16,23 +16,6 @@ data:
       authorizationStrategy:
         loggedInUsersCanDoAnything:
           allowAnonymousRead: false
-      clouds:
-        - kubernetes:
-            name: "kubernetes"
-            serverUrl: "https://kubernetes.default.svc"
-            jenkinsUrl: "http://jenkins-service.jenkins.svc.cluster.local:8080"
-            templates:
-              - name: "gcp-agent"
-                label: "gcp-agent"
-                serviceAccount: "jenkins-sa"
-                containers:
-                  - name: "jnlp"
-                    image: "jenkins/inbound-agent:latest"
-                    workingDir: "/home/jenkins/agent"
-                  - name: "build-tools"
-                    image: "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"
-                    command: "cat"
-                    ttyEnabled: true
 
     credentials:
       system:
@@ -54,12 +37,10 @@ data:
       location:
         url: "https://jenkins.andrei-test.lendo.dev/"
 
-    # --- MOVED TO TOP-LEVEL ROOT ---
-    appearance:
+    appearance:                  # <--- ALIGN WITH 'unclassified:' (NO EXTRA SPACES)
       themeManager:
         disableUserThemes: false
         theme: "dark"
-    # -------------------------------
 
     jobs:
       - script: |
