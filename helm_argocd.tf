@@ -7,11 +7,24 @@ resource "helm_release" "argocd" {
   create_namespace = true
   version          = "10.8.2"
 
-  set = [
-    {
-      name  = "server.extraArgs"
-      value = "{--insecure}"
-    }
+  values = [
+    <<-EOF
+    server:
+      extraArgs:
+        - --insecure
+
+    configs:
+      # Enable 'jenkins' account with API key capability
+      cm:
+        accounts.jenkins: apiKey
+
+      # Assign application sync/get permissions to the jenkins account
+      rbac:
+        policy.csv: |
+          p, role:jenkins-sync, applications, sync, */*, allow
+          p, role:jenkins-sync, applications, get, */*, allow
+          g, jenkins, role:jenkins-sync
+    EOF
   ]
 
   depends_on = [

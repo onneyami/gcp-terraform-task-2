@@ -115,7 +115,11 @@ pipeline {
                         git commit -m "chore(ci): auto-update apod-api image to \${FULL_IMAGE} [skip ci]" || echo "No changes to commit"
                         
                         echo "===> Pushing updated manifest to ${env.TARGET_BRANCH} branch..."
-                        git push https://x-access-token:\$GITHUB_CREDS_PSW@github.com/onneyami/gcp-terraform-task-2.git HEAD:${env.TARGET_BRANCH}
+                        
+                        # --- SANITIZE TOKEN (TRIM NEWLINES/WHITESPACE) ---
+                        CLEAN_GITHUB_TOKEN=\$(echo -n "\$GITHUB_CREDS_PSW" | tr -d '\\r\\n ')
+                        
+                        git push https://x-access-token:\${CLEAN_GITHUB_TOKEN}@github.com/onneyami/gcp-terraform-task-2.git HEAD:${env.TARGET_BRANCH}
                     """
                 }
             }
