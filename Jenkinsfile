@@ -133,11 +133,15 @@ pipeline {
                 container('build-tools') {
                     sh """#!/bin/bash
                         set -e
-                        echo "===> Querying all ArgoCD applications..."
+                        echo "===> Retrieving fresh ArgoCD token from Kubernetes Secret..."
                         
+                        # Fetch token directly from ESO secret; fallback to credentials variable if kubectl fails
+                        LIVE_TOKEN=\$(kubectl get secret jenkins-pipeline-secrets -n jenkins -o jsonpath='{.data.ARGOCD_TOKEN}' 2>/dev/null | base64 -d || echo -n "\${ARGOCD_TOKEN}")
+
+                        echo "===> Querying all ArgoCD applications..."
                         RESPONSE_FILE=\$(mktemp)
                         HTTP_STATUS=\$(curl -s -o "\$RESPONSE_FILE" -w "%{http_code}" \\
-                          -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
+                          -H "Authorization: Bearer \${LIVE_TOKEN}" \\
                           "http://${env.ARGOCD_SERVER}/api/v1/applications")
 
                         if [ "\${HTTP_STATUS}" -ne 200 ]; then
@@ -160,7 +164,7 @@ pipeline {
                         for APP in \$APP_NAMES; do
                             echo "--> Triggering sync for application: \$APP"
                             SYNC_STATUS=\$(curl -s -o /dev/null -w "%{http_code}" -X POST \\
-                              -H "Authorization: Bearer \${ARGOCD_TOKEN}" \\
+                              -H "Authorization: Bearer \${LIVE_TOKEN}" \\
                               -H "Content-Type: application/json" \\
                               "http://${env.ARGOCD_SERVER}/api/v1/applications/\$APP/sync" \\
                               -d '{"prune": true}')
@@ -172,7 +176,6 @@ pipeline {
                 }
             }
         }
-    } 
 
     post {
         always {
