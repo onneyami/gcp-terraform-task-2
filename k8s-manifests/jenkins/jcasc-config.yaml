@@ -40,17 +40,23 @@ data:
               - string:
                   scope: GLOBAL
                   id: "argocd-jenkins-token"
-                  secret: "YOUR_ARGOCD_TOKEN_HERE"
+                  secret: "${ARGOCD_TOKEN}"               # <--- UPDATED (was YOUR_ARGOCD_TOKEN_HERE)
                   description: "ArgoCD API Token for Jenkins Pipeline"
               - usernamePassword:
                   scope: GLOBAL
                   id: "github-jenkins-token"
                   username: "onneyami"
-                  password: "YOUR_GITHUB_TOKEN_HERE"
+                  password: "${GITHUB_TOKEN}"             # <--- UPDATED (was YOUR_GITHUB_TOKEN_HERE)
                   description: "GitHub Personal Access Token"
     unclassified:
       location:
         url: "https://jenkins.andrei-test.lendo.dev/"
+      # --- ADDED THIS SECTION ---
+      appearance:
+        themeManager:
+          disableUserThemes: false
+          theme: "dark"
+      # --------------------------
     jobs:
       - script: |
           pipelineJob('gcp-app-ci-cd') {

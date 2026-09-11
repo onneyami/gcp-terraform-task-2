@@ -33,7 +33,9 @@ spec:
                 kubernetes:latest \
                 job-dsl:latest \
                 credentials:latest \
-                plain-credentials:latest
+                plain-credentials:latest \
+                theme-manager:latest \
+                dark-theme:latest 
           volumeMounts:
             - name: jenkins-home-volume
               mountPath: /var/jenkins_home
@@ -45,6 +47,9 @@ spec:
               value: "-Djenkins.install.runSetupWizard=false"
             - name: CASC_JENKINS_CONFIG
               value: /var/jenkins_home/casc_configs/jenkins.yaml
+          envFrom:
+            - secretRef:
+                name: jenkins-pipeline-secrets
           ports:
             - containerPort: 8080
               name: web
