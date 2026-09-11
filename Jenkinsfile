@@ -138,7 +138,7 @@ pipeline {
                         LIVE_TOKEN=\$(curl -s --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \\
                           -H "Authorization: Bearer \${K8S_TOKEN}" \\
                           "https://kubernetes.default.svc/api/v1/namespaces/jenkins/secrets/jenkins-pipeline-secrets" | \\
-                          jq -r '.data.ARGOCD_TOKEN // empty' | base64 -d 2>/dev/null || true)
+                          python3 -c "import sys, json, base64; print(base64.b64decode(json.load(sys.stdin)['data']['ARGOCD_TOKEN']).decode('utf-8'))" 2>/dev/null || true)
 
                         if [ -z "\$LIVE_TOKEN" ]; then
                             echo "❌ Failed to fetch ARGOCD_TOKEN from K8s API secret jenkins-pipeline-secrets."
@@ -157,7 +157,7 @@ pipeline {
                             exit 1
                         fi
 
-                        APP_NAMES=\$(jq -r '.items[].metadata.name // empty' "\$RESPONSE_FILE")
+                        APP_NAMES=\$(python3 -c "import sys, json; [print(i['metadata']['name']) for i in json.load(sys.stdin).get('items', []) if 'metadata' in i and 'name' in i['metadata']]" < "\$RESPONSE_FILE" 2>/dev/null || true)
 
                         if [ -z "\$APP_NAMES" ]; then
                             echo "⚠️ No applications found in ArgoCD response."
