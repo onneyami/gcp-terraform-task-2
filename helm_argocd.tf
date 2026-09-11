@@ -1,3 +1,9 @@
+# Read the static signing key from GCP Secret Manager
+data "google_secret_manager_secret_version" "argocd_secretkey" {
+  secret  = "argocd-server-secretkey"
+  project = "andrei-innowise-tests-120826"
+}
+
 # 1. Deploy ArgoCD via Helm
 resource "helm_release" "argocd" {
   name             = "argocd"
@@ -14,6 +20,11 @@ resource "helm_release" "argocd" {
         - --insecure
 
     configs:
+      # Inject persistent JWT signing key to preserve API tokens across redeployments
+      secret:
+        extra:
+          server.secretkey: "${data.google_secret_manager_secret_version.argocd_secretkey.secret_data}"
+
       # Enable 'jenkins' account with API key capability
       cm:
         accounts.jenkins: apiKey
