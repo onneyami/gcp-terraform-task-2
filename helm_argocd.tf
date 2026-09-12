@@ -4,6 +4,31 @@ data "google_secret_manager_secret_version" "argocd_secretkey" {
   project = "andrei-innowise-tests-120826"
 }
 
+# Read stored Jenkins API token from GCP Secret Manager
+data "google_secret_manager_secret_version" "jenkins_argocd_token" {
+  secret  = "jenkins-argocd-token"
+  project = "andrei-innowise-tests-120826"
+}
+
+# Dynamically parse JWT payload (jti & iat) from the stored token
+locals {
+  jwt_payload_raw = split(".", trimspace(data.google_secret_manager_secret_version.jenkins_argocd_token.secret_data))[1]
+  jwt_payload_padded = "${local.jwt_payload_raw}${
+    length(local.jwt_payload_raw) % 4 == 2 ? "==" : (
+      length(local.jwt_payload_raw) % 4 == 3 ? "=" : ""
+    )
+  }"
+  jwt_payload_clean = replace(replace(local.jwt_payload_padded, "-", "+"), "_", "/")
+  jwt_json          = jsondecode(base64decode(local.jwt_payload_clean))
+
+  argocd_jenkins_tokens_json = jsonencode([
+    {
+      id  = local.jwt_json.jti
+      iat = local.jwt_json.iat
+    }
+  ])
+}
+
 # 1. Deploy ArgoCD via Helm
 resource "helm_release" "argocd" {
   name             = "argocd"
@@ -20,10 +45,11 @@ resource "helm_release" "argocd" {
         - --insecure
 
     configs:
-      # Inject persistent JWT signing key to preserve API tokens across redeployments
+      # Inject persistent JWT signing key AND active token registry
       secret:
         extra:
           server.secretkey: "${data.google_secret_manager_secret_version.argocd_secretkey.secret_data}"
+          accounts.jenkins.tokens: '${local.argocd_jenkins_tokens_json}'
 
       # Enable 'jenkins' account with API key capability
       cm:
