@@ -4,28 +4,28 @@ metadata:
   name: jenkins-casc-config
   namespace: jenkins
 data:
-  jenkins.yaml: |
+  01-core.yaml: |
     jenkins:
       slaveAgentPort: 50000
       securityRealm:
         local:
           allowsSignup: false
           users:
-            - id: "admin"
-              password: "AdminPassword123!"
+            - id: "${JENKINS_ADMIN_USER}"
+              password: "${JENKINS_ADMIN_PASSWORD}"
       authorizationStrategy:
         loggedInUsersCanDoAnything:
           allowAnonymousRead: false
       clouds:
         - kubernetes:
             name: "kubernetes"
-            namespace: "jenkins"
+            namespace: "${JENKINS_NAMESPACE}"
             serverUrl: "https://kubernetes.default.svc"
-            jenkinsUrl: "http://jenkins-service.jenkins.svc.cluster.local:8080"
+            jenkinsUrl: "${JENKINS_INTERNAL_URL}"
             templates:
               - name: "gcp-agent"
                 label: "gcp-agent"
-                serviceAccount: "jenkins-sa"
+                serviceAccount: "${JENKINS_SERVICE_ACCOUNT}"
                 containers:
                   - name: "jnlp"
                     image: "jenkins/inbound-agent:latest"
@@ -35,6 +35,16 @@ data:
                     command: "cat"
                     ttyEnabled: true
 
+    unclassified:
+      location:
+        url: "${JENKINS_EXTERNAL_URL}"
+
+    appearance:
+      themeManager:
+        disableUserThemes: false
+        theme: "dark"
+
+  02-credentials.yaml: |
     credentials:
       system:
         domainCredentials:
@@ -47,19 +57,11 @@ data:
               - usernamePassword:
                   scope: GLOBAL
                   id: "github-jenkins-token"
-                  username: "onneyami"
+                  username: "${GITHUB_USERNAME}"
                   password: "${GITHUB_TOKEN}"
                   description: "GitHub Personal Access Token"
 
-    unclassified:
-      location:
-        url: "https://jenkins.andrei-test.lendo.dev/"
-
-    appearance:
-      themeManager:
-        disableUserThemes: false
-        theme: "dark"
-
+  03-jobs.yaml: |
     jobs:
       - script: |
           pipelineJob('gcp-app-ci-cd') {
@@ -68,7 +70,7 @@ data:
                 scm {
                   git {
                     remote {
-                      url('https://github.com/onneyami/gcp-terraform-task-2.git')
+                      url('${GIT_REPO_URL}')
                     }
                     branches('*/main')
                   }

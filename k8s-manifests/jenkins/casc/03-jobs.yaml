@@ -1,0 +1,17 @@
+jobs:
+  - script: |
+      pipelineJob('gcp-app-ci-cd') {
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('${GIT_REPO_URL}')
+                }
+                branches('*/main')
+              }
+            }
+            scriptPath('Jenkinsfile')
+          }
+        }
+      }

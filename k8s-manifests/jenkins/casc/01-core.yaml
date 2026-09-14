@@ -1,0 +1,38 @@
+jenkins:
+  slaveAgentPort: 50000
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_USER}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  clouds:
+    - kubernetes:
+        name: "kubernetes"
+        namespace: "${JENKINS_NAMESPACE}"
+        serverUrl: "https://kubernetes.default.svc"
+        jenkinsUrl: "${JENKINS_INTERNAL_URL}"
+        templates:
+          - name: "gcp-agent"
+            label: "gcp-agent"
+            serviceAccount: "${JENKINS_SERVICE_ACCOUNT}"
+            containers:
+              - name: "jnlp"
+                image: "jenkins/inbound-agent:latest"
+                workingDir: "/home/jenkins/agent"
+              - name: "build-tools"
+                image: "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"
+                command: "cat"
+                ttyEnabled: true
+
+unclassified:
+  location:
+    url: "${JENKINS_EXTERNAL_URL}"
+
+appearance:
+  themeManager:
+    disableUserThemes: false
+    theme: "dark"
