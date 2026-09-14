@@ -1,0 +1,58 @@
+grafana:
+  adminPassword: "AdminPassword123!"
+  # --- Grafana Persistent Storage ---
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: standard-rwo
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    finalizers:
+      - kubernetes.io/pvc-protection
+  # ----------------------------------
+  ingress:
+    enabled: true
+    ingressClassName: nginx
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - grafana.andrei-test.lendo.dev
+    tls:
+      - secretName: grafana-tls-cert
+        hosts:
+          - grafana.andrei-test.lendo.dev
+  sidecar:
+    datasources:
+      enabled: true
+      defaultDatasourceEnabled: false
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+      label: grafana_dashboard
+      labelValue: "1"
+  additionalDataSources:
+    - name: Prometheus
+      type: prometheus
+      uid: prometheus
+      access: proxy
+      url: http://prometheus-operated.monitoring.svc.cluster.local:9090
+      isDefault: true
+      jsonData:
+        httpMethod: POST
+        timeInterval: 15s
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard-rwo
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi

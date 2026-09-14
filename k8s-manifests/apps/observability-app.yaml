@@ -7,70 +7,19 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  source:
-    chart: kube-prometheus-stack
-    repoURL: https://prometheus-community.github.io/helm-charts
-    targetRevision: 88.6.2
-    helm:
-      values: |
-        grafana:
-          adminPassword: "AdminPassword123!"
-          # --- Grafana Persistent Storage ---
-          persistence:
-            enabled: true
-            type: pvc
-            storageClassName: standard-rwo
-            accessModes:
-              - ReadWriteOnce
-            size: 10Gi
-            finalizers:
-              - kubernetes.io/pvc-protection
-          # ----------------------------------
-          ingress:
-            enabled: true
-            ingressClassName: nginx
-            annotations:
-              cert-manager.io/cluster-issuer: "letsencrypt-prod"
-            hosts:
-              - grafana.andrei-test.lendo.dev
-            tls:
-              - secretName: grafana-tls-cert
-                hosts:
-                  - grafana.andrei-test.lendo.dev
-          sidecar:
-            datasources:
-              enabled: true
-              defaultDatasourceEnabled: false
-            dashboards:
-              enabled: true
-              searchNamespace: ALL
-              label: grafana_dashboard
-              labelValue: "1"
-          additionalDataSources:
-            - name: Prometheus
-              type: prometheus
-              uid: prometheus
-              access: proxy
-              url: http://prometheus-operated.monitoring.svc.cluster.local:9090
-              isDefault: true
-              jsonData:
-                httpMethod: POST
-                timeInterval: 15s
+  sources:
+    # 1. Official Helm Chart Repository
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 88.6.2
+      helm:
+        valueFiles:
+          - $values/k8s-manifests/monitoring/values.yaml
 
-        prometheus:
-          prometheusSpec:
-            retention: 7d
-            serviceMonitorSelectorNilUsesHelmValues: false
-            podMonitorSelectorNilUsesHelmValues: false
-            ruleSelectorNilUsesHelmValues: false
-            storageSpec:
-              volumeClaimTemplate:
-                spec:
-                  storageClassName: standard-rwo
-                  accessModes: ["ReadWriteOnce"]
-                  resources:
-                    requests:
-                      storage: 20Gi
+    # 2. Your Git Repository (referenced as '$values')
+    - repoURL: https://github.com/onneyami/gcp-terraform-task-2.git
+      targetRevision: main
+      ref: values
 
   destination:
     server: https://kubernetes.default.svc
