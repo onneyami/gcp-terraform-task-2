@@ -46,7 +46,7 @@ spec:
             - name: JAVA_OPTS
               value: "-Djenkins.install.runSetupWizard=false"
             - name: CASC_JENKINS_CONFIG
-              value: /var/jenkins_home/casc_configs/jenkins.yaml
+              value: "/var/jenkins_home/casc_configs/"
           envFrom:
             - secretRef:
                 name: jenkins-pipeline-secrets
