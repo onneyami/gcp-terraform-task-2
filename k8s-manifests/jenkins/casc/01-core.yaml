@@ -4,8 +4,8 @@ jenkins:
     local:
       allowsSignup: false
       users:
-        - id: "${JENKINS_ADMIN_USER}"
-          password: "${JENKINS_ADMIN_PASSWORD}"
+        - id: "${JENKINS_ADMIN_USER:-admin}"
+          password: "${JENKINS_ADMIN_PASSWORD:-AdminPassword123!}"
   authorizationStrategy:
     loggedInUsersCanDoAnything:
       allowAnonymousRead: false
