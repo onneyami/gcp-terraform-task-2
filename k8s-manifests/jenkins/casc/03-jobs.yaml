@@ -6,7 +6,7 @@ jobs:
             scm {
               git {
                 remote {
-                  url('${GIT_REPO_URL}')
+                  url('${GIT_REPO_URL:-https://github.com/onneyami/gcp-terraform-task-2.git}')
                 }
                 branches('*/main')
               }
